@@ -1,0 +1,6 @@
+@DougBot.API_HostAddress = http://localhost:5253
+
+GET {{DougBot.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -5,6 +5,7 @@ using DougBot.Shared;
 using DougBot.Discord.Notifications;
 using MediatR;
 using System;
+using Serilog;
 
 namespace DougBot.Discord.Modules
 {
@@ -44,7 +45,7 @@ namespace DougBot.Discord.Modules
                     // Create component to view history
                     var viewHistoryButton = new ButtonBuilder()
                         .WithLabel("View History")
-                        .WithCustomId("dmhistory")
+                        .WithCustomId($"dmhistory:{notification.Message.Author.Id}")
                         .WithStyle(ButtonStyle.Primary);
                     var components = new ComponentBuilder()
                         .WithButton(viewHistoryButton)
@@ -62,36 +63,41 @@ namespace DougBot.Discord.Modules
 
     public class DMHistory : InteractionModuleBase
     {
-        [ComponentInteraction("dmhistory", true)]
-        public async Task dmhistory()
+        [ComponentInteraction("dmhistory:*", true)]
+        public async Task dmhistory(string author)
         {
-            // Get the original message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
-            var user = response.Author;
-            var dmChannel = await user.CreateDMChannelAsync();
-            var messages = await dmChannel.GetMessagesAsync(20).FlattenAsync();
-            messages = messages.OrderBy(m => m.CreatedAt);
-            // Create the string to send
-            var messageString = "";
-            foreach(var message in messages)
+            try
             {
-                messageString += $"\n{message.Author.Username}: {message.Content}";
-                if (message.Embeds.Any())
+                var user = await Context.Guild.GetUserAsync(Convert.ToUInt64(author));
+                var dmChannel = await user.CreateDMChannelAsync();
+                var messages = await dmChannel.GetMessagesAsync(20).FlattenAsync();
+                messages = messages.OrderBy(m => m.CreatedAt);
+                // Create the string to send
+                var messageString = "";
+                foreach (var message in messages)
                 {
-                    foreach(var embed in message.Embeds)
+                    messageString += $"\n{message.Author.Username}: {message.Content}";
+                    if (message.Embeds.Any())
                     {
-                        messageString += $" {embed.Description}";
+                        foreach (var embed in message.Embeds)
+                        {
+                            messageString += $" {embed.Description}";
+                        }
                     }
                 }
+                // Create an embed to reply with
+                var responseEmbed = new EmbedBuilder()
+                    .WithDescription(messageString)
+                    .WithColor(Color.Blue)
+                    .WithCurrentTimestamp()
+                    .Build();
+                // Send the message
+                await RespondAsync(embed: responseEmbed, ephemeral: true);
             }
-            // Create an embed to reply with
-            var responseEmbed = new EmbedBuilder()
-                .WithDescription(messageString)
-                .WithColor(Color.Blue)
-                .WithCurrentTimestamp()
-                .Build();
-            // Send the message
-            await RespondAsync(embed: responseEmbed);
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error in DMHistory");
+            }
         }
     }
 }

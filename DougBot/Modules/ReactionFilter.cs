@@ -62,6 +62,11 @@ namespace DougBot.Discord.Modules
                             }
                             if (any_removed)
                             {
+                                // Limit the response to 4000 characters
+                                if (response.Length > 4000)
+                                {
+                                    response = response.Substring(0, 4000);
+                                }
                                 Log.Information(response);
                             }
                         }

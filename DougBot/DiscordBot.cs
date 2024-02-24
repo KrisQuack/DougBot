@@ -21,7 +21,7 @@ public class DiscordBot
             {
                 AlwaysDownloadUsers = true,
                 MessageCacheSize = 100,
-                GatewayIntents = GatewayIntents.All,
+                GatewayIntents = GatewayIntents.All & ~GatewayIntents.GuildScheduledEvents & ~GatewayIntents.GuildPresences & ~GatewayIntents.GuildInvites,
                 LogLevel = LogSeverity.Info
             }))
             .AddSingleton<DiscordEventListener>()

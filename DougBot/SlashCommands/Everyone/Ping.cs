@@ -17,7 +17,7 @@ namespace DougBot.Discord.SlashCommands.Everyone
             // measure http latency
             var sw = new System.Diagnostics.Stopwatch();
             sw.Start();
-            await RespondAsync($"Pong!");
+            await RespondAsync($"Pong!", ephemeral: true);
             sw.Stop();
 
             // Create the embed for the response

@@ -1,8 +1,11 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using DougBot.Shared;
+using MongoDB.Driver;
 using Serilog;
 using System.Reflection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace DougBot.Discord
 {
@@ -49,14 +52,14 @@ namespace DougBot.Discord
 
                 if (!result.IsSuccess)
                     Log.Error(result.ErrorReason);
-                    switch (result.Error)
-                    {
-                        case InteractionCommandError.UnmetPrecondition:
-                            // implement
-                            break;
-                        default:
-                            break;
-                    }
+                switch (result.Error)
+                {
+                    case InteractionCommandError.UnmetPrecondition:
+                        // implement
+                        break;
+                    default:
+                        break;
+                }
             }
             catch
             {
@@ -68,15 +71,51 @@ namespace DougBot.Discord
         private async Task HandleInteractionExecute(ICommandInfo commandInfo, IInteractionContext context, IResult result)
         {
             if (!result.IsSuccess)
-                Log.Error(result.ErrorReason);
+            {
+                Log.Error($"An error occurred while executing the slash command {commandInfo.Name}: {result.ErrorReason}");
                 switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        // implement
+                        await context.Interaction.RespondAsync("You do not have permission to execute this command.", ephemeral: true);
+                        break;
+                    case InteractionCommandError.UnknownCommand:
+                        await context.Interaction.RespondAsync("The command you are trying to execute does not exist.", ephemeral: true);
+                        break;
+                    case InteractionCommandError.ParseFailed:
+                        await context.Interaction.RespondAsync("The parameters you provided are not valid.", ephemeral: true);
                         break;
                     default:
+                        await context.Interaction.RespondAsync("An error occurred while executing the command.", ephemeral: true);
                         break;
                 }
+
+            }
+
+            // Print the command result to the log channel
+            var data = context.Interaction.Data as SocketSlashCommandData;
+            var auditFields = new List<EmbedFieldBuilder>
+            {
+                new() { Name = "Command", Value = commandInfo.Name, IsInline = true },
+                new() { Name = "User", Value = context.User.Mention, IsInline = true },
+                new() { Name = "Channel", Value = (context.Channel as SocketTextChannel).Mention, IsInline = true },
+                new() { Name = "Parameters", Value = data.Options.Any() ? string.Join("\n", data.Options.Select(x => $"{x.Name}: {x.Value}")) : "null", IsInline = false },
+                new() { Name = "Error", Value = result.ErrorReason ?? "null", IsInline = false }
+            };
+            // If a fields value is null, it will not be added to the embed
+            auditFields.RemoveAll(x => x.Value == "null");
+
+            var embed = new EmbedBuilder()
+                .WithTitle("Slash Command Executed")
+                .WithFields(auditFields)
+                .WithCurrentTimestamp()
+                .WithColor(result.IsSuccess ? Color.Green : Color.Red);
+
+            var settings = await new Mongo().GetBotSettings();
+            var logChannelId = settings["log_channel_id"].AsString;
+            var guild = _client.Guilds.FirstOrDefault();
+            var logChannel = guild.GetTextChannel(ulong.Parse(logChannelId));
+            await logChannel.SendMessageAsync(embed: embed.Build());
         }
+
     }
 }

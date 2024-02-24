@@ -37,7 +37,7 @@ namespace DougBot.Discord.Modules
                             {
                                 // Get the channel by ID
                                 var channelsListRequest = youtube_service.Channels.List("contentDetails");
-                                channelsListRequest.Id = channel["channel_id"].AsString;
+                                channelsListRequest.Id = channel["youtube_id"].AsString;
                                 var channelsListResponse = await channelsListRequest.ExecuteAsync();
                                 uploads_playlist_id = channelsListResponse.Items[0].ContentDetails.RelatedPlaylists.Uploads;
                             }
@@ -56,15 +56,15 @@ namespace DougBot.Discord.Modules
                                 continue;
                             }
                             // Get the full video details
-                            var videoListRequest = youtube_service.Videos.List("snippet");
+                            var videoListRequest = youtube_service.Videos.List("snippet,contentDetails");
                             videoListRequest.Id = video_id;
                             var videoListResponse = await videoListRequest.ExecuteAsync();
                             var video_details = videoListResponse.Items[0];
                             var channel_name = video_details.Snippet.ChannelTitle;
-                            var channel_url = $"https://www.youtube.com/channel/{channel["channel_id"].AsString}";
+                            var channel_url = $"https://www.youtube.com/channel/{channel["youtube_id"].AsString}";
                             var video_title = video_details.Snippet.Title;
                             var video_url = $"https://www.youtube.com/watch?v={video_id}";
-                            var video_thumbnail = video_details.Snippet.Thumbnails.Default__.Url;
+                            var video_thumbnail = video_details.Snippet.Thumbnails.Maxres.Url;
                             var duration = XmlConvert.ToTimeSpan(video_details.ContentDetails.Duration).TotalSeconds;
                             // Skip if it is a live video
                             var live_status = video_details.Snippet.LiveBroadcastContent;
@@ -77,24 +77,24 @@ namespace DougBot.Discord.Modules
                                 .WithTitle(video_title)
                                 .WithUrl(video_url)
                                 .WithAuthor(channel_name, url: channel_url)
-                                .WithThumbnailUrl(video_thumbnail)
+                                .WithImageUrl(video_thumbnail)
                                 .WithColor(Color.Orange)
                                 .WithFooter($"Duration: {TimeSpan.FromSeconds(duration).ToString("hh\\:mm\\:ss")}");
                             var post_channel = await notification.Client.GetChannelAsync(Convert.ToUInt64(channel["post_channel_id"].AsString));
                             var mention = $"<@&{channel["mention_role_id"].AsString}>";
-                            // Dont ping shorts
-                            if(duration < 60)
-                            {
-                                mention = "Short!";
-                            }
-                            // If it is the VOD channel and the title contains "VOD"
-                            if (channel["youtube_id"].AsString == "UCzL0SBEypNk4slpzSbxo01g" && video_title.ToLower().Contains("vod"))
+                            // If it is a short
+                            // Or if it is the VOD channel and the title does not contain "VOD"
+                            if (duration < 120|| (channel["youtube_id"].AsString == "UCzL0SBEypNk4slpzSbxo01g" && !video_title.ToLower().Contains("vod")))
                             {
                                 mention = "<@&812501073289805884>";
                             }
                             // Send the message
                             await ((ITextChannel)post_channel).SendMessageAsync(mention,embed: embed.Build());
+                            // Update the last video ID
+                            channel["last_video_id"] = video_id;
                         }
+                        // Update the settings
+                        await new Mongo().UpdateBotSettings(settings);
                     }
                     catch (Exception e)
                     {

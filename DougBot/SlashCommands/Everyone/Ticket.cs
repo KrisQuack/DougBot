@@ -120,15 +120,15 @@ namespace DougBot.Discord.SlashCommands.Everyone
                 // Check this has been run in a thread and that it is of the base channel
                 if (thread != null && thread.CategoryId == BaseChannel.Id)
                 {
+                    // Respond before closing
+                    await RespondAsync("Ticket closed", ephemeral: true);
                     // Close the ticket
                     await thread.ModifyAsync(properties => properties.Archived = true);
-                    // Respond to the user
-                    await RespondAsync("Ticket closed");
                 }
                 else
                 {
                     // Respond to the user
-                    await RespondAsync("This command can only be run in a ticket");
+                    await RespondAsync("This command can only be run in a ticket", ephemeral: true);
                 }
             }
             catch (Exception e)

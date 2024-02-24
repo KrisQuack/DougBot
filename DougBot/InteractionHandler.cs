@@ -88,7 +88,6 @@ namespace DougBot.Discord
                         await context.Interaction.RespondAsync("An error occurred while executing the command.", ephemeral: true);
                         break;
                 }
-
             }
 
             // Print the command result to the log channel
@@ -98,7 +97,7 @@ namespace DougBot.Discord
                 new() { Name = "Command", Value = commandInfo.Name, IsInline = true },
                 new() { Name = "User", Value = context.User.Mention, IsInline = true },
                 new() { Name = "Channel", Value = (context.Channel as SocketTextChannel).Mention, IsInline = true },
-                new() { Name = "Parameters", Value = data.Options.Any() ? string.Join("\n", data.Options.Select(x => $"{x.Name}: {x.Value}")) : "null", IsInline = false },
+                new() { Name = "Parameters", Value = data != null && data.Options.Any() ? string.Join("\n", data.Options.Select(x => $"{x.Name}: {x.Value}")) : "null", IsInline = false },
                 new() { Name = "Error", Value = result.ErrorReason ?? "null", IsInline = false }
             };
             // If a fields value is null, it will not be added to the embed

@@ -25,6 +25,12 @@ namespace DougBot.Shared
             return settings;
         }
 
+        public async Task UpdateBotSettings(BsonDocument settings)
+        {
+            var filter = Builders<BsonDocument>.Filter.Eq("_id", settings["_id"]);
+            await BotSettings.ReplaceOneAsync(filter, settings);
+        }
+
         public async Task<BsonDocument> GetMember(ulong id)
         {
             var member = await Members.Find(new BsonDocument("_id", id.ToString())).FirstOrDefaultAsync();

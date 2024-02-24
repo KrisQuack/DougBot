@@ -46,8 +46,8 @@ namespace DougBot.Discord.Modules
                                     await onboarding_channel.SendMessageAsync($"{member.Mention} you have not yet verified and will be kicked in the next 5 minutes if not complete");
                                 }
                             }
-                            // If the member has been in the server for more than one week
-                            else if (member.JoinedAt < one_week_ago)
+                            // If the member has been in the server for more than one week and does not have the member role
+                            else if (member.JoinedAt < one_week_ago && !member.Roles.Contains(member_role))
                             {
                                 // Add the member role
                                 await member.AddRoleAsync(member_role);
@@ -72,8 +72,10 @@ namespace DougBot.Discord.Modules
                     }
                     catch (Exception e)
                     {
-                        Log.Error(e, "Youtube_ReadyHandler");
+                        Log.Error(e, "VerificationChecks_ReadyHandler");
                     }
+                    // Delay 1 hour
+                    await Task.Delay(3600000);
                 }
             });
         }

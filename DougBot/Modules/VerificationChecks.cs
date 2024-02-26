@@ -21,20 +21,26 @@ namespace DougBot.Discord.Modules
                         var kicked = 0;
                         var deleted_messages = 0;
                         // Get some values
-                        var ten_minutes_ago = DateTime.Now.AddMinutes(-10);
-                        var one_week_ago = DateTime.Now.AddDays(-7);
+                        var ten_minutes_ago = DateTime.UtcNow.AddMinutes(-10);
+                        var one_week_ago = DateTime.UtcNow.AddDays(-7);
                         var guild = notification.Client.Guilds.FirstOrDefault();
                         var onboarding_channel = guild.GetTextChannel(1041406855123042374);
-                        var new_role = guild.GetRole(935020318408462398);
-                        var member_role = guild.GetRole(720807137319583804);
+                        var freshman_role = guild.GetRole(935020318408462398);
+                        var graduate_role = guild.GetRole(720807137319583804);
+                        // Make sure the roles are not null
+                        if(freshman_role == null || graduate_role == null)
+                        {
+                            Log.Error("VerificationChecks_ReadyHandler: Roles not found");
+                            return;
+                        }
                         // Loop through all members in the server who do not have the member role
                         foreach (var member in guild.Users.Where(x => !x.IsBot))
                         {
-                            // If they they do not have the new role
-                            if(!member.Roles.Contains(new_role))
+                            // If they they do not have the freshman role
+                            if(!member.Roles.Contains(freshman_role))
                             {
                                 // If the member has been in the server for more than 10 minutes
-                                if(member.JoinedAt < ten_minutes_ago)
+                                if(member.JoinedAt.Value.UtcDateTime < ten_minutes_ago)
                                 {
                                     // Kick the member for not being verified
                                     await member.KickAsync("Not Verified");
@@ -47,10 +53,10 @@ namespace DougBot.Discord.Modules
                                 }
                             }
                             // If the member has been in the server for more than one week and does not have the member role
-                            else if (member.JoinedAt < one_week_ago && !member.Roles.Contains(member_role))
+                            else if (member.JoinedAt.Value.UtcDateTime < one_week_ago && !member.Roles.Contains(graduate_role))
                             {
                                 // Add the member role
-                                await member.AddRoleAsync(member_role);
+                                await member.AddRoleAsync(graduate_role);
                                 graduated++;
                             }
                         }
@@ -58,24 +64,28 @@ namespace DougBot.Discord.Modules
                         var messages = await onboarding_channel.GetMessagesAsync(100).FlattenAsync();
                         foreach (var message in messages)
                         {
-                            if(message.Timestamp < ten_minutes_ago && message.Id != 1158902786524721212)
+                            if(message.Timestamp.UtcDateTime < ten_minutes_ago && message.Id != 1158902786524721212)
                             {
-                                await message.DeleteAsync();
-                                deleted_messages++;
+                                try
+                                {
+                                    await message.DeleteAsync();
+                                    deleted_messages++;
+                                }
+                                catch { }
                             }
                         }
                         // Log the results
                         if(graduated > 0 || kicked > 0 || deleted_messages > 0)
                         {
-                            Log.Information($"Verification Checks:\nGraduated: {graduated}\nKicked: {kicked}\nDeleted Messages: {deleted_messages}");
+                            Log.Information($"**Verification Checks:**\nGraduated: {graduated}\nKicked: {kicked}\nDeleted Messages: {deleted_messages}");
                         }
                     }
                     catch (Exception e)
                     {
                         Log.Error(e, "VerificationChecks_ReadyHandler");
                     }
-                    // Delay 1 hour
-                    await Task.Delay(3600000);
+                    // Delay 10 minutes
+                    await Task.Delay(600000);
                 }
             });
         }

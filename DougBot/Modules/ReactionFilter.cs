@@ -36,11 +36,10 @@ namespace DougBot.Discord.Modules
                         foreach (var channel in filter_channels)
                         {
                             var response = $"**Filtering reactions in {channel.Name}**\n";
-                            var any_removed = false;
                             var messages = await channel.GetMessagesAsync(100).FlattenAsync();
+                            var removed_reactions = new List<Tuple<IMessage, IEmote>>();
                             foreach (var message in messages)
                             {
-                                response += $"**Message {message.GetJumpUrl()}**\n";
                                 // Remove any not permitted reactions
                                 foreach (var reaction in message.Reactions)
                                 {
@@ -55,21 +54,21 @@ namespace DougBot.Discord.Modules
                                             continue;
                                         }
                                         await message.RemoveAllReactionsForEmoteAsync(reaction.Key);
-                                        response += $"{reaction.Key.Name} {users.Count()}\n";
-                                        any_removed = true;
+                                        removed_reactions.Add(Tuple.Create(message, reaction.Key));
                                     }
                                 }
                             }
-                            if (any_removed)
+                            // For each unique message, send a log
+                            foreach (var message in removed_reactions.Select(x => x.Item1).Distinct())
                             {
-                                // Limit the response to 4000 characters
-                                if (response.Length > 4000)
-                                {
-                                    response = response.Substring(0, 4000);
-                                }
+                                response += $"\nMessage {message.GetJumpUrl()}\n{string.Join("\n", removed_reactions.Where(x => x.Item1 == message).Select(x => x.Item2))}";
+                            }
+                            if (removed_reactions.Count > 0)
+                            {
                                 Log.Information(response);
                             }
                         }
+
                     }
                     catch (Exception ex)
                     {

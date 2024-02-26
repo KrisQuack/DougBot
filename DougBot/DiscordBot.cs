@@ -65,7 +65,7 @@ public class DiscordBot
                 };
 
                 var embed = new EmbedBuilder()
-                    .WithTitle(e.RenderMessage())
+                    .WithDescription(e.RenderMessage())
                     .WithColor(color)
                     .WithCurrentTimestamp();
 

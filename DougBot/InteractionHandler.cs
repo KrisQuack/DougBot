@@ -85,7 +85,7 @@ namespace DougBot.Discord
                         await context.Interaction.RespondAsync("The parameters you provided are not valid.", ephemeral: true);
                         break;
                     default:
-                        await context.Interaction.RespondAsync("An error occurred while executing the command.", ephemeral: true);
+                        await context.Interaction.RespondAsync($"An error occurred while executing the command: {result.ErrorReason}", ephemeral: true);
                         break;
                 }
             }

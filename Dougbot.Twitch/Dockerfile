@@ -8,11 +8,7 @@ WORKDIR /app
 COPY ./Dougbot.Twitch/ /app
 
 # Install build essentials, compile your dependencies, then remove build essentials
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc build-essential && \
-    pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.txt && \
-    apt-get purge -y --auto-remove gcc build-essential && \
-    rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.txt
 
 # Run Main.py when the container launches
 CMD ["python", "Dougbot.Twitch.py"]

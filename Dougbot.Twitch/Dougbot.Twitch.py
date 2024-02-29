@@ -40,6 +40,10 @@ class Client(commands.Bot):
                 logging.getLogger("Main").error(f'Failed to initialize: {e}\n{traceback.format_exc()}')
                 os._exit(1)
         logging.getLogger("Main").info(f'Guild available: {guild.name} ({guild.id})')
+        
+    # Overide the interaction handler to not trigger on commands
+    async def on_interaction(self, interaction):
+        return;
 
     async def load_settings(self):
         self.settings = await self.database.BotSettings.find_one()

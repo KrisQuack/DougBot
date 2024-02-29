@@ -89,7 +89,7 @@ public class ReportCmd : InteractionModuleBase
                     .WithCurrentTimestamp());
             // Get the channels to send the receipt to
             var settings = await new Mongo().GetBotSettings();
-            var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings["mod_channel_id"]));
+            var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings[""]));
             await modChannel.SendMessageAsync(embeds: embeds.Select(e => e.Build()).ToArray());
             await ModifyOriginalResponseAsync(m => m.Content = "Your report has been sent to the mods.");
         }

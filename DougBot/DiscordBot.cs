@@ -64,13 +64,19 @@ public class DiscordBot
                     _ => Color.Default
                 };
 
+                var description = e.RenderMessage();
+                if (description.Length > 4096)
+                {
+                    description = description.Substring(0, 4000);
+                }
+
                 var embed = new EmbedBuilder()
-                    .WithDescription(e.RenderMessage())
+                    .WithDescription(description)
                     .WithColor(color)
                     .WithCurrentTimestamp();
 
                 if (e.Exception != null)
-                    embed.WithDescription($"{e.Exception.Message}```{e.Exception}```");
+                    embed.AddField(e.Exception.Message, $"```{e.Exception}```");
 
                 var message = e.Level >= LogEventLevel.Warning ? "<@&1072596548636135435>" : "";
 

@@ -81,7 +81,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task automod()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetChannelAsync(ulong.Parse(channel_id));
             // Get automod rules
@@ -119,7 +119,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task slowmode()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             // Toggle the button
@@ -142,7 +142,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task emotes()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
@@ -150,12 +150,12 @@ namespace DougBot.Discord.SlashCommands.Mod
             if (permissions.Value.UseExternalEmojis == PermValue.Allow)
             {
                 // Remove the permission
-                permissions.Value.Modify(useExternalEmojis: PermValue.Deny);
+                permissions = permissions.Value.Modify(useExternalEmojis: PermValue.Deny);
             }
             else
             {
                 // Add the permission
-                permissions.Value.Modify(useExternalEmojis: PermValue.Allow);
+                permissions = permissions.Value.Modify(useExternalEmojis: PermValue.Allow);
             }
             // Update the channel permissions
             await channel.AddPermissionOverwriteAsync(channel.Guild.EveryoneRole, permissions.Value);
@@ -168,7 +168,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task stickers()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
@@ -176,12 +176,12 @@ namespace DougBot.Discord.SlashCommands.Mod
             if (permissions.Value.UseExternalStickers == PermValue.Allow)
             {
                 // Remove the permission
-                permissions.Value.Modify(useExternalStickers: PermValue.Deny);
+                permissions = permissions.Value.Modify(useExternalStickers: PermValue.Deny);
             }
             else
             {
                 // Add the permission
-                permissions.Value.Modify(useExternalStickers: PermValue.Allow);
+                permissions = permissions.Value.Modify(useExternalStickers: PermValue.Allow);
             }
             // Update the channel permissions
             await channel.AddPermissionOverwriteAsync(channel.Guild.EveryoneRole, permissions.Value);
@@ -194,7 +194,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task reactions()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
@@ -202,12 +202,12 @@ namespace DougBot.Discord.SlashCommands.Mod
             if (permissions.Value.AddReactions == PermValue.Allow)
             {
                 // Remove the permission
-                permissions.Value.Modify(addReactions: PermValue.Deny);
+                permissions = permissions.Value.Modify(addReactions: PermValue.Deny);
             }
             else
             {
                 // Add the permission
-                permissions.Value.Modify(addReactions: PermValue.Allow);
+                permissions = permissions.Value.Modify(addReactions: PermValue.Allow);
             }
             // Update the channel permissions
             await channel.AddPermissionOverwriteAsync(channel.Guild.EveryoneRole, permissions.Value);
@@ -220,7 +220,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task embeds()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
@@ -228,12 +228,12 @@ namespace DougBot.Discord.SlashCommands.Mod
             if (permissions.Value.EmbedLinks == PermValue.Allow)
             {
                 // Remove the permission
-                permissions.Value.Modify(embedLinks: PermValue.Deny);
+                permissions = permissions.Value.Modify(embedLinks: PermValue.Deny);
             }
             else
             {
                 // Add the permission
-                permissions.Value.Modify(embedLinks: PermValue.Allow);
+                permissions = permissions.Value.Modify(embedLinks: PermValue.Allow);
             }
             // Update the channel permissions
             await channel.AddPermissionOverwriteAsync(channel.Guild.EveryoneRole, permissions.Value);
@@ -246,7 +246,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task attachments()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
@@ -254,12 +254,12 @@ namespace DougBot.Discord.SlashCommands.Mod
             if (permissions.Value.AttachFiles == PermValue.Allow)
             {
                 // Remove the permission
-                permissions.Value.Modify(attachFiles: PermValue.Deny);
+                permissions = permissions.Value.Modify(attachFiles: PermValue.Deny);
             }
             else
             {
                 // Add the permission
-                permissions.Value.Modify(attachFiles: PermValue.Allow);
+                permissions = permissions.Value.Modify(attachFiles: PermValue.Allow);
             }
             // Update the channel permissions
             await channel.AddPermissionOverwriteAsync(channel.Guild.EveryoneRole, permissions.Value);
@@ -272,7 +272,7 @@ namespace DougBot.Discord.SlashCommands.Mod
         public async Task restore()
         {
             // Get the embed from the message
-            var response = await Context.Interaction.GetOriginalResponseAsync();
+            var response = ((IComponentInteraction)Context.Interaction).Message;
             var channel_id = response.Embeds.FirstOrDefault().Footer.Value.Text;
             var channel = await Context.Guild.GetTextChannelAsync(ulong.Parse(channel_id));
             // Get the message
@@ -294,7 +294,6 @@ namespace DougBot.Discord.SlashCommands.Mod
             // Delete the message
             await message_to_delete.DeleteAsync();
             // Edit the message
-            await reload_buttons(response);
             await RespondAsync("Channel permissions restored", ephemeral: true);
         }
 
@@ -303,8 +302,9 @@ namespace DougBot.Discord.SlashCommands.Mod
             // Get the message
             var embed = message.Embeds.FirstOrDefault();
             var channel_id = embed.Footer.Value.Text;
-            var channel = (ITextChannel)message.Channel;
-            var guild = channel.Guild;
+            var command_channel = (ITextChannel)message.Channel;
+            var guild = command_channel.Guild;
+            var channel = await guild.GetTextChannelAsync(ulong.Parse(channel_id));
             var permissions = channel.GetPermissionOverwrite(channel.Guild.EveryoneRole);
 
             // Check if automod is active

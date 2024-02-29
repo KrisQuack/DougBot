@@ -37,6 +37,12 @@ namespace DougBot.Shared
             return member;
         }
 
+        public async Task<BsonDocument> GetMemberByMCRedeem(string code)
+        {
+            var member = await Members.Find(new BsonDocument("mc_redeem", code)).FirstOrDefaultAsync();
+            return member;
+        }
+
         public async Task<List<BsonDocument>> GetAllMembers()
         {
             return await Members.Find(new BsonDocument()).ToListAsync();

@@ -45,16 +45,20 @@ namespace DougBot.Discord.Modules
                                 {
                                     if (!emote_whitelist.Contains(reaction.Key.Name))
                                     {
-                                        // Get users who reacted with this emote
-                                        var users = await message.GetReactionUsersAsync(reaction.Key, int.MaxValue).FlattenAsync();
-                                        var guild_users = users.OfType<IGuildUser>().ToList();
-                                        // If any of the users are mods, skip
-                                        if (guild_users.Any(x => x.IsBot || x.IsWebhook || x.GuildPermissions.ModerateMembers))
+                                        try
                                         {
-                                            continue;
+                                            // Get users who reacted with this emote
+                                            var users = await message.GetReactionUsersAsync(reaction.Key, int.MaxValue).FlattenAsync();
+                                            var guild_users = users.OfType<IGuildUser>().ToList();
+                                            // If any of the users are mods, skip
+                                            if (guild_users.Any(x => x.IsBot || x.IsWebhook || x.GuildPermissions.ModerateMembers))
+                                            {
+                                                continue;
+                                            }
+                                            await message.RemoveAllReactionsForEmoteAsync(reaction.Key);
+                                            removed_reactions.Add(Tuple.Create(message, reaction.Key));
                                         }
-                                        await message.RemoveAllReactionsForEmoteAsync(reaction.Key);
-                                        removed_reactions.Add(Tuple.Create(message, reaction.Key));
+                                        catch (Exception) { }
                                     }
                                 }
                             }
@@ -72,10 +76,7 @@ namespace DougBot.Discord.Modules
                     }
                     catch (Exception ex)
                     {
-                        if (!ex.Message.Contains("10014"))
-                        {
-                            Log.Error(ex, "Error in ReactionFilter_ReadyHandler");
-                        }
+                        Log.Error(ex, "Error in ReactionFilter_ReadyHandler");
                     }
                     // Sleep for 10 minutes
                     await Task.Delay(600000);

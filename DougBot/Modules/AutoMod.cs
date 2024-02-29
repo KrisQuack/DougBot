@@ -83,13 +83,14 @@ namespace DougBot.Discord.Modules
                 }
                 await Task.Delay(1000);
                 var messages = await thread.GetMessagesAsync(5).FlattenAsync();
-                if (messages.OrderBy(m => m.CreatedAt).FirstOrDefault() is IUserMessage msg)
+                if (messages.OrderBy(m => m.CreatedAt).FirstOrDefault() is IUserMessage msg && !msg.IsPinned)
                 {
                     await msg.PinAsync();
                     var embed = new EmbedBuilder()
                         .WithTitle("Welcome to Your Thread!")
                         .WithDescription("Server rules apply. Issues? Contact [mod team](https://discord.com/channels/567141138021089308/880127379119415306/1154847821514670160).\n" +
-                            $"{thread.Owner.Mention}: You can Pin/Unpin posts. [How?](https://cdn.discordapp.com/attachments/886548334154760242/1135511848817545236/image.png)")
+                            $"{thread.Owner.Mention} You can Pin/Unpin posts by right clicking a message and going to **Apps**")
+                        .WithThumbnailUrl("https://cdn.discordapp.com/attachments/886548334154760242/1135511848817545236/image.png")
                         .WithColor(Color.Orange)
                         .WithAuthor(thread.Name, thread.Guild.IconUrl)
                         .Build();

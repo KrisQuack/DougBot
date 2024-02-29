@@ -281,16 +281,18 @@ namespace DougBot.Discord.Modules
             {
                 try
                 {
-                    if (notification.NewMessage.Author.IsBot || notification.NewMessage.Author.IsWebhook) { return; }
+                    if (notification.NewMessage == null || notification.NewMessage.Author == null || notification.NewMessage.Author.IsBot || notification.NewMessage.Author.IsWebhook) { return; }
+                    if (notification.Channel == null) { return; }
                     // Get the before and after states
                     var after = notification.NewMessage;
                     // Get the message from the database
                     var dbMessage = await new Mongo().GetMessage(notification.NewMessage.Id);
+                    if (dbMessage == null) { return; }
                     var updateLog = new BsonDocument
-                {
-                    { "timestamp", DateTime.UtcNow },
-                    { "changes", new BsonDocument() }
-                };
+                    {
+                        { "timestamp", DateTime.UtcNow },
+                        { "changes", new BsonDocument() }
+                    };
                     // Print an embed
                     var embed = new EmbedBuilder()
                         .WithTitle($"Message Updated in {after.Channel.Name}")
@@ -300,11 +302,15 @@ namespace DougBot.Discord.Modules
                         .WithTimestamp(DateTime.UtcNow);
                     if (dbMessage["content"] != after.Content)
                     {
-                        embed.AddField("Content", dbMessage["content"], inline: false);
-                        embed.AddField("Updated Content", after.Content, inline: false);
-                        updateLog["changes"]["content"] = after.Content;
-                        dbMessage["content"] = after.Content;
+                        if (!string.IsNullOrEmpty(dbMessage["content"].ToString()) && !string.IsNullOrEmpty(after.Content))
+                        {
+                            embed.AddField("Content", dbMessage["content"], inline: false);
+                            embed.AddField("Updated Content", after.Content, inline: false);
+                            updateLog["changes"]["content"] = after.Content;
+                            dbMessage["content"] = after.Content;
+                        }
                     }
+
                     // Send the embed
                     if (embed.Fields.Any())
                     {

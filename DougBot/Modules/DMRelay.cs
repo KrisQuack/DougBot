@@ -69,7 +69,10 @@ namespace DougBot.Discord.Modules
             try
             {
                 var user = await Context.Guild.GetUserAsync(Convert.ToUInt64(author));
+                if (user == null) { throw new Exception("User not found"); }
                 var dmChannel = await user.CreateDMChannelAsync();
+                if (dmChannel == null) { throw new Exception("DM Channel not found"); }
+
                 var messages = await dmChannel.GetMessagesAsync(20).FlattenAsync();
                 messages = messages.OrderBy(m => m.CreatedAt);
                 // Create the string to send

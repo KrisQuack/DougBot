@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
+using System;
 using TimeZoneConverter;
 
 namespace DougBot.Discord.SlashCommands.Everyone
@@ -13,10 +14,19 @@ namespace DougBot.Discord.SlashCommands.Everyone
             [Summary(description: "The time to convert to a timestamp. Format: 12:00"), Autocomplete(typeof(TimeAutocompleteHandler))] string time,
             [Summary(description: "The time zone to use. Format: America/Los_Angeles"), Autocomplete(typeof(TimezoneAutocompleteHandler))] string timezone)
         {
+            // Check if the timezone is valid
+            if (!TZConvert.KnownIanaTimeZoneNames.Any(x => x == timezone))
+            {
+                throw new Exception("Invalid timezone provided, please search for it in the autofill if you are unsure *(e.g. America/Los_Angeles)*");
+            }
             // Get the time zone
             var tz = TZConvert.GetTimeZoneInfo(timezone);
             // Parse the date and time
-            var dateTime = DateTime.Parse($"{date} {time} {tz.BaseUtcOffset}");
+            DateTime dateTime;
+            if (!DateTime.TryParse($"{date} {time} {tz.BaseUtcOffset}", out dateTime))
+            {
+                throw new Exception("Invalid date and time format");
+            }
             var dateTimeOffset = new DateTimeOffset(dateTime);
             var parsedUnixTime = dateTimeOffset.ToUnixTimeSeconds();
             var embed = new EmbedBuilder()
@@ -36,7 +46,8 @@ namespace DougBot.Discord.SlashCommands.Everyone
     {
         public override async Task<AutocompletionResult> GenerateSuggestionsAsync(IInteractionContext context, IAutocompleteInteraction autocompleteInteraction, IParameterInfo parameter, IServiceProvider services)
         {
-            var date = DateTime.UtcNow.ToString("dd/MMM/yyyy");
+            var tz = TZConvert.GetTimeZoneInfo("America/Los_Angeles");
+            var date = DateTime.UtcNow.Add(tz.BaseUtcOffset).ToString("dd/MMM/yyyy");
             return AutocompletionResult.FromSuccess(new[] { new AutocompleteResult(date, date) });
         }
     }
@@ -45,7 +56,9 @@ namespace DougBot.Discord.SlashCommands.Everyone
     {
         public override async Task<AutocompletionResult> GenerateSuggestionsAsync(IInteractionContext context, IAutocompleteInteraction autocompleteInteraction, IParameterInfo parameter, IServiceProvider services)
         {
-            var time = DateTime.UtcNow.ToString("HH:mm");
+            // Get current time in America/Los_Angeles
+            var tz = TZConvert.GetTimeZoneInfo("America/Los_Angeles");
+            var time = DateTime.UtcNow.Add(tz.BaseUtcOffset).ToString("HH:mm");
             return AutocompletionResult.FromSuccess(new[] { new AutocompleteResult(time, time) });
         }
     }
@@ -63,7 +76,7 @@ namespace DougBot.Discord.SlashCommands.Everyone
             }
             else
             {
-                return AutocompletionResult.FromSuccess(new[] { new AutocompleteResult("America/Los_Angeles", "America/Los_Angeles") });
+                return AutocompletionResult.FromSuccess([new AutocompleteResult("America/Los_Angeles", "America/Los_Angeles")]);
             }
         }
     }

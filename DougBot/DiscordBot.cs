@@ -3,6 +3,7 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using DougBot.API;
 using DougBot.Shared;
+using DougBot.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Core;

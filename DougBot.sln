@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DougBot.Shared", "DougBot.S
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DougBot.API", "DougBot.API\DougBot.API.csproj", "{26464E23-3EDA-4FC5-92B6-A7DFDB392C3D}"
 EndProject
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "Dougbot.Twitch", "Dougbot.Twitch\Dougbot.Twitch.pyproj", "{93D502A6-34A7-4DB7-BC88-A4F611EDE32D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DougBot.Twitch", "DougBot.Twitch\DougBot.Twitch.csproj", "{1034D335-4EDC-420D-BB66-5E98C99411ED}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,8 +29,10 @@ Global
 		{26464E23-3EDA-4FC5-92B6-A7DFDB392C3D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{26464E23-3EDA-4FC5-92B6-A7DFDB392C3D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{26464E23-3EDA-4FC5-92B6-A7DFDB392C3D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{93D502A6-34A7-4DB7-BC88-A4F611EDE32D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{93D502A6-34A7-4DB7-BC88-A4F611EDE32D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1034D335-4EDC-420D-BB66-5E98C99411ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1034D335-4EDC-420D-BB66-5E98C99411ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1034D335-4EDC-420D-BB66-5E98C99411ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1034D335-4EDC-420D-BB66-5E98C99411ED}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

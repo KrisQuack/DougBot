@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="3.13.1" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="TwitchLib.Api" Version="3.10.0-preview-e47ba7f" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DougBot.Shared\DougBot.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -27,7 +27,7 @@ namespace DougBot.Twitch
         public TwitchBot(DiscordSocketClient client)
         {
             _client = client;
-            Task.Run(() => InitializeAsync());
+            Task.Run(InitializeAsync);
         }
 
         private async Task InitializeAsync()
@@ -108,14 +108,16 @@ namespace DougBot.Twitch
                     while (_websocketClient.State == WebSocketState.Open)
                     {
                         // Check if the keepalive is older than 5 minutes
-                        if (DateTime.UtcNow - _lastKeepalive > TimeSpan.FromMinutes(5))
+                        if (_lastKeepalive.AddMinutes(5) < DateTime.UtcNow)
                         {
                             await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Keepalive", CancellationToken.None);
+                            Log.Warning($"Websocket closed due to keepalive timeout: {_lastKeepalive.ToString("hh:mm:ss")}");
                             break;
                         }
                         // Wait 10 seconds
                         await Task.Delay(10000);
                     }
+                    Log.Warning($"EventSub reconnecting: {_websocketClient.State}");
                 }
                 catch (Exception ex)
                 {

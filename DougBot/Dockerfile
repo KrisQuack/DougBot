@@ -9,6 +9,7 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["./DougBot/DougBot.csproj", "DougBot/"]
 COPY ["./DougBot.API/DougBot.API.csproj", "DougBot.API/"]
+COPY ["./DougBot.Twitch/DougBot.Twitch.csproj", "DougBot.Twitch/"]
 COPY ["./DougBot.Shared/DougBot.Shared.csproj", "DougBot.Shared/"]
 RUN dotnet restore "./DougBot/DougBot.csproj"
 COPY . .

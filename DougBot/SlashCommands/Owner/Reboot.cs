@@ -1,20 +1,15 @@
-﻿using Discord;
-using Discord.Interactions;
-using Discord.WebSocket;
-using DougBot.Shared;
-using Serilog;
+﻿using Discord.Interactions;
 
-namespace DougBot.Discord.SlashCommands.Owner
+namespace DougBot.Discord.SlashCommands.Owner;
+
+public class Reboot : InteractionModuleBase
 {
-    public class Reboot : InteractionModuleBase
+    [SlashCommand("reboot", "reboot the bot")]
+    [EnabledInDm(false)]
+    [RequireOwner]
+    public async Task Task()
     {
-        [SlashCommand("reboot", "reboot the bot")]
-        [EnabledInDm(false)]
-        [RequireOwner]
-        public async Task task()
-        {
-            await RespondAsync("Rebooting...", ephemeral: true);
-            Environment.Exit(0);
-        }
+        await RespondAsync("Rebooting...", ephemeral: true);
+        Environment.Exit(0);
     }
 }

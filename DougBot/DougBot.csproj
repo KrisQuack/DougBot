@@ -31,5 +31,4 @@
     <ProjectReference Include="..\DougBot.Twitch\DougBot.Twitch.csproj" />
   </ItemGroup>
 
-
 </Project>

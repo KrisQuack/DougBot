@@ -1,9 +1,7 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using DougBot.API;
 using DougBot.Shared;
-using DougBot.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Core;
@@ -14,6 +12,17 @@ namespace DougBot.Discord;
 public class DiscordBot
 {
     private static DiscordSocketClient _client;
+
+    private static readonly Dictionary<LogSeverity, LogEventLevel> SeverityLevelMapping = new()
+    {
+        { LogSeverity.Critical, LogEventLevel.Fatal },
+        { LogSeverity.Error, LogEventLevel.Error },
+        { LogSeverity.Warning, LogEventLevel.Warning },
+        { LogSeverity.Info, LogEventLevel.Information },
+        { LogSeverity.Verbose, LogEventLevel.Verbose },
+        { LogSeverity.Debug, LogEventLevel.Debug }
+    };
+
     private static ServiceProvider ConfigureServices()
     {
         return new ServiceCollection()
@@ -22,7 +31,8 @@ public class DiscordBot
             {
                 AlwaysDownloadUsers = true,
                 MessageCacheSize = 100,
-                GatewayIntents = GatewayIntents.All & ~GatewayIntents.GuildScheduledEvents & ~GatewayIntents.GuildPresences & ~GatewayIntents.GuildInvites,
+                GatewayIntents = GatewayIntents.All & ~GatewayIntents.GuildScheduledEvents &
+                                 ~GatewayIntents.GuildPresences & ~GatewayIntents.GuildInvites,
                 LogLevel = LogSeverity.Info
             }))
             .AddSingleton<DiscordEventListener>()
@@ -66,10 +76,7 @@ public class DiscordBot
                 };
 
                 var description = e.RenderMessage();
-                if (description.Length > 4096)
-                {
-                    description = description.Substring(0, 4000);
-                }
+                if (description.Length > 4096) description = description.Substring(0, 4000);
 
                 var embed = new EmbedBuilder()
                     .WithDescription(description)
@@ -87,9 +94,7 @@ public class DiscordBot
                     var logChannelId = settings["log_channel_id"].AsString;
                     if (ulong.TryParse(logChannelId, out var channelId) &&
                         guild.GetTextChannel(channelId) is { } logChannel)
-                    {
                         await logChannel.SendMessageAsync(message, embed: embed.Build());
-                    }
                 }
             }))
             .CreateLogger();
@@ -112,18 +117,11 @@ public class DiscordBot
         Environment.Exit(0);
     }
 
-    private static readonly Dictionary<LogSeverity, LogEventLevel> SeverityLevelMapping = new Dictionary<LogSeverity, LogEventLevel>
-    {
-        { LogSeverity.Critical, LogEventLevel.Fatal },
-        { LogSeverity.Error, LogEventLevel.Error },
-        { LogSeverity.Warning, LogEventLevel.Warning },
-        { LogSeverity.Info, LogEventLevel.Information },
-        { LogSeverity.Verbose, LogEventLevel.Verbose },
-        { LogSeverity.Debug, LogEventLevel.Debug }
-    };
     private static async Task LogAsync(LogMessage message)
     {
-        var severity = SeverityLevelMapping.TryGetValue(message.Severity, out var logEventLevel) ? logEventLevel : LogEventLevel.Information;
+        var severity = SeverityLevelMapping.TryGetValue(message.Severity, out var logEventLevel)
+            ? logEventLevel
+            : LogEventLevel.Information;
         Log.Write(severity, message.Exception, "[{Source}] {Message}", message.Source, message.Message);
     }
 }

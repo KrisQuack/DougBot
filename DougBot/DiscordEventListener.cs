@@ -1,8 +1,9 @@
-﻿using Discord.WebSocket;
-using MediatR;
+﻿using Discord;
+using Discord.WebSocket;
 using DougBot.Discord.Notifications;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Discord;
+using Serilog;
 
 namespace DougBot.Discord;
 
@@ -12,7 +13,7 @@ public class DiscordEventListener
 
     private readonly DiscordSocketClient _client;
     private readonly IServiceScopeFactory _serviceScope;
-    private bool firstReady = true;
+    private bool _firstReady = true;
 
     public DiscordEventListener(DiscordSocketClient client, IServiceScopeFactory serviceScope)
     {
@@ -46,11 +47,12 @@ public class DiscordEventListener
 
     private Task OnReadyAsync()
     {
-        if (firstReady)
+        if (_firstReady)
         {
-            firstReady = false;
+            _firstReady = false;
             return Mediator.Publish(new ReadyNotification(_client), _cancellationToken);
         }
+        Log.Information("Reconnected to Discord");
         return Task.CompletedTask;
     }
 

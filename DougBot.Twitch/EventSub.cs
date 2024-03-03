@@ -21,7 +21,7 @@ namespace DougBot.Twitch
 
         private TwitchAPI _twitchAPI;
         private ClientWebSocket _websocketClient;
-        private string _websocketSessionId;
+        private string? _websocketSessionId;
         private DateTime _lastKeepalive = DateTime.UtcNow;
         private DiscordSocketClient _client;
         private BsonDocument _settings;
@@ -108,8 +108,8 @@ namespace DougBot.Twitch
                         Log.Warning($"Websocket closed due to keepalive timeout: {_lastKeepalive.ToString("hh:mm:ss")}");
                         break;
                     }
-                    // If the last status is older than 5 minutes, print the status
-                    if (lastStatus.AddMinutes(5) < DateTime.UtcNow)
+                    // If the last status is older than 15 minutes, print the status
+                    if (lastStatus.AddMinutes(15) < DateTime.UtcNow)
                     {
                         subscriptions = await _twitchAPI.Helix.EventSub.GetEventSubSubscriptionsAsync();
                         // Check if any are not "enabled"
@@ -125,6 +125,8 @@ namespace DougBot.Twitch
                     await Task.Delay(10000);
                 }
                 Log.Warning($"EventSub reconnecting: {_websocketClient.State}");
+                _websocketSessionId = null;
+                _lastKeepalive = DateTime.UtcNow;
                 // Wait 10 seconds before reconnecting
                 await Task.Delay(10000);
             }

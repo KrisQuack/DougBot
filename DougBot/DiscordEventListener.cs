@@ -12,6 +12,7 @@ public class DiscordEventListener
 
     private readonly DiscordSocketClient _client;
     private readonly IServiceScopeFactory _serviceScope;
+    private bool firstReady = true;
 
     public DiscordEventListener(DiscordSocketClient client, IServiceScopeFactory serviceScope)
     {
@@ -45,7 +46,12 @@ public class DiscordEventListener
 
     private Task OnReadyAsync()
     {
-        return Mediator.Publish(new ReadyNotification(_client), _cancellationToken);
+        if (firstReady)
+        {
+            firstReady = false;
+            return Mediator.Publish(new ReadyNotification(_client), _cancellationToken);
+        }
+        return Task.CompletedTask;
     }
 
     private Task OnUserJoinedAsync(SocketGuildUser arg)

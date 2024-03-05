@@ -5,9 +5,9 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
-namespace DougBot.Discord;
+namespace DougBot.Handlers;
 
-public class DiscordEventListener
+public class DiscordEventHandler
 {
     private readonly CancellationToken _cancellationToken;
 
@@ -15,7 +15,7 @@ public class DiscordEventListener
     private readonly IServiceScopeFactory _serviceScope;
     private bool _firstReady = true;
 
-    public DiscordEventListener(DiscordSocketClient client, IServiceScopeFactory serviceScope)
+    public DiscordEventHandler(DiscordSocketClient client, IServiceScopeFactory serviceScope)
     {
         _client = client;
         _serviceScope = serviceScope;
@@ -52,7 +52,6 @@ public class DiscordEventListener
             _firstReady = false;
             return Mediator.Publish(new ReadyNotification(_client), _cancellationToken);
         }
-        Log.Information("Reconnected to Discord");
         return Task.CompletedTask;
     }
 

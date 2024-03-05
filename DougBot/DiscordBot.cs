@@ -1,7 +1,8 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using DougBot.Shared;
+using DougBot.Handlers;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Core;
@@ -35,7 +36,7 @@ public class DiscordBot
                                  ~GatewayIntents.GuildPresences & ~GatewayIntents.GuildInvites,
                 LogLevel = LogSeverity.Info
             }))
-            .AddSingleton<DiscordEventListener>()
+            .AddSingleton<DiscordEventHandler>()
             .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>()))
             .AddSingleton<InteractionHandler>()
             .BuildServiceProvider();
@@ -57,54 +58,19 @@ public class DiscordBot
 
     private async Task RunAsync()
     {
+        await using var services = ConfigureServices();
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .Enrich.FromLogContext()
             .WriteTo.Console()
-            .WriteTo.Sink(new DelegateSink(async e =>
-            {
-                // Pick color based on log level
-                var color = e.Level switch
-                {
-                    LogEventLevel.Fatal => Color.DarkRed,
-                    LogEventLevel.Error => Color.Red,
-                    LogEventLevel.Warning => Color.Orange,
-                    LogEventLevel.Information => Color.Blue,
-                    LogEventLevel.Debug => Color.DarkBlue,
-                    LogEventLevel.Verbose => Color.DarkGrey,
-                    _ => Color.Default
-                };
-
-                var description = e.RenderMessage();
-                if (description.Length > 4096) description = description.Substring(0, 4000);
-
-                var embed = new EmbedBuilder()
-                    .WithDescription(description)
-                    .WithColor(color)
-                    .WithCurrentTimestamp();
-
-                if (e.Exception != null)
-                    embed.AddField(e.Exception.Message, $"```{e.Exception}```");
-
-                var message = e.Level >= LogEventLevel.Warning ? "<@&1072596548636135435>" : "";
-
-                var settings = await new Mongo().GetBotSettings();
-                if (_client?.Guilds.FirstOrDefault() is { } guild)
-                {
-                    var logChannelId = settings["log_channel_id"].AsString;
-                    if (ulong.TryParse(logChannelId, out var channelId) &&
-                        guild.GetTextChannel(channelId) is { } logChannel)
-                        await logChannel.SendMessageAsync(message, embed: embed.Build());
-                }
-            }))
+            .WriteTo.Sink(new DelegateSink(services.GetRequiredService<IMediator>()))
             .CreateLogger();
-
-        await using var services = ConfigureServices();
 
         _client = services.GetRequiredService<DiscordSocketClient>();
         _client.Log += LogAsync;
 
-        var listener = services.GetRequiredService<DiscordEventListener>();
+        var listener = services.GetRequiredService<DiscordEventHandler>();
         await listener.StartAsync();
 
         var interactionHandler = services.GetRequiredService<InteractionHandler>();
@@ -128,15 +94,15 @@ public class DiscordBot
 
 public class DelegateSink : ILogEventSink
 {
-    private readonly Action<LogEvent> _emit;
+    private readonly IMediator _mediator;
 
-    public DelegateSink(Action<LogEvent> emit)
+    public DelegateSink(IMediator mediator)
     {
-        _emit = emit ?? throw new ArgumentNullException(nameof(emit));
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     public void Emit(LogEvent logEvent)
     {
-        _emit(logEvent);
+        _mediator.Publish(new LoggingNotification(logEvent));
     }
 }

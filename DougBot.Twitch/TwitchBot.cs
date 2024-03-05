@@ -2,6 +2,8 @@
 using DougBot.Shared;
 using MongoDB.Bson;
 using Serilog;
+using System.Reactive;
+using System;
 using TwitchLib.Api;
 
 namespace DougBot.Twitch;
@@ -22,7 +24,7 @@ public class TwitchBot
     {
         try
         {
-            Log.Information("Initializing Twitch Bot");
+            Log.Information("[{Source}] {Message}", "Twitch Bot", "Initializing");
             // Get the settings
             _settings = await new Mongo().GetBotSettings();
             // Authenticate
@@ -40,8 +42,11 @@ public class TwitchBot
             {
                 // Get the time untill the refresh token expires
                 var time = refresh.ExpiresIn;
-                Log.Information($"Twitch Bot initialized. Refresh token expires in {time} seconds");
-                // Wait untill 10 minutes before the token expires
+                // Convert this to a discord timestamp
+                var dateTimeOffset = new DateTimeOffset(DateTime.UtcNow.AddSeconds(time));
+                var parsedUnixTime = dateTimeOffset.ToUnixTimeSeconds();
+                Log.Information("[{Source}] {Message}", "Twitch Bot",$"Refresh token expires in <t:{parsedUnixTime}:R> at <t:{parsedUnixTime}:F>");
+                // Wait until 10 minutes before the token expires
                 await Task.Delay((time - 600) * 1000);
                 // Refresh the token
                 refresh = await _twitchApi.Auth.RefreshAuthTokenAsync(_settings["twitch_bot_refresh_token"].AsString,
@@ -53,7 +58,7 @@ public class TwitchBot
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error in TwitchBot");
+            Log.Error(ex, "[{Source}]", "TwitchBot");
         }
     }
 }

@@ -30,7 +30,7 @@ public class ReactionFilterReadyHandler : INotificationHandler<ReadyNotification
                     // For each channel, get the last 100 messages
                     foreach (var channel in filterChannels)
                     {
-                        var response = $"**Filtering reactions in {channel.Name}**\n";
+                        var response = $"**{channel.Name}**\n";
                         var messages = await channel.GetMessagesAsync().FlattenAsync();
                         var removedReactions = new List<Tuple<IMessage, IEmote>>();
                         foreach (var message in messages)
@@ -58,12 +58,12 @@ public class ReactionFilterReadyHandler : INotificationHandler<ReadyNotification
                         foreach (var message in removedReactions.Select(x => x.Item1).Distinct())
                             response +=
                                 $"\nMessage {message.GetJumpUrl()}\n{string.Join("\n", removedReactions.Where(x => x.Item1 == message).Select(x => x.Item2))}";
-                        if (removedReactions.Count > 0) Log.Information(response);
+                        if (removedReactions.Count > 0) Log.Information("[{Source}] {Message}", "Reaction Filter", response);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Error in ReactionFilter_ReadyHandler");
+                    Log.Error(ex, "[{Source}]",  "ReactionFilter_ReadyHandler");
                 }
 
                 // Sleep for 10 minutes

@@ -29,7 +29,7 @@ public class VerificationChecksReadyHandler : INotificationHandler<ReadyNotifica
                     // Make sure the roles are not null
                     if (freshmanRole == null || graduateRole == null)
                     {
-                        Log.Error("VerificationChecks_ReadyHandler: Roles not found");
+                        Log.Error("[{Source}] {Message}", "VerificationChecks_ReadyHandler", "Role not found");
                         return;
                     }
 
@@ -75,12 +75,12 @@ public class VerificationChecksReadyHandler : INotificationHandler<ReadyNotifica
 
                     // Log the results
                     if (graduated > 0 || kicked > 0 || deletedMessages > 0)
-                        Log.Information(
-                            $"**Verification Checks:**\nGraduated: {graduated}\nKicked: {kicked}\nDeleted Messages: {deletedMessages}");
+                        Log.Information("[{Source}] {Message}", "Verification Checks",
+                            $"Graduated: {graduated}\nKicked: {kicked}\nDeleted Messages: {deletedMessages}");
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "VerificationChecks_ReadyHandler");
+                    Log.Error(e, "[{Source}]",  "VerificationChecks_ReadyHandler");
                 }
 
                 // Delay 10 minutes

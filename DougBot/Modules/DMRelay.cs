@@ -94,7 +94,7 @@ public class DmHistory : InteractionModuleBase
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error in DMHistory");
+            Log.Error(ex, "[{Source}]",  "DMHistory");
         }
     }
 }

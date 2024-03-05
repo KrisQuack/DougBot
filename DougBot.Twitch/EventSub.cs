@@ -103,7 +103,7 @@ internal class EventSub
                 {
                     await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Keepalive",
                         CancellationToken.None);
-                    Log.Warning($"Websocket closed due to keepalive timeout: {_lastKeepalive:hh:mm:ss}");
+                    Log.Warning("[{Source}] {Message}", "EventSub", $"Websocket closed due to keepalive timeout: {_lastKeepalive:hh:mm:ss}");
                     break;
                 }
 
@@ -114,13 +114,10 @@ internal class EventSub
                     // Check if any are not "enabled"
                     if (subscriptions.Subscriptions.Any(sub => sub.Status != "enabled"))
                     {
-                        Log.Warning(
-                            $"Some subscriptions are not enabled:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
+                        Log.Warning("[{Source}] {Message}", "EventSub", $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
                         break;
                     }
-
-                    Log.Information(
-                        $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
+                    Log.Information("[{Source}] {Message}", "EventSub", $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
                     lastStatus = DateTime.UtcNow;
                 }
 
@@ -128,7 +125,7 @@ internal class EventSub
                 await Task.Delay(10000);
             }
 
-            Log.Warning($"EventSub reconnecting: {_websocketClient.State}");
+            Log.Warning("[{Source}] {Message}", "EventSub", $"EventSub reconnecting: {_websocketClient.State}");
             _websocketSessionId = null;
             _lastKeepalive = DateTime.UtcNow;
             // Wait 10 seconds before reconnecting
@@ -162,7 +159,7 @@ internal class EventSub
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Error in ListenToWebsocket");
+                    Log.Error(ex, "[{Source}]","ListenToWebsocket");
                 }
         });
     }
@@ -182,7 +179,7 @@ internal class EventSub
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, $"Error parsing JSON: {response}");
+                Log.Warning(ex, "[{Source}] {Message}", "EventSub", $"Error parsing JSON: {response}");
                 return;
             }
 
@@ -191,7 +188,8 @@ internal class EventSub
             {
                 var welcomeMessage = JsonSerializer.Deserialize<WebsocketWelcome.Root>(response);
                 _websocketSessionId = welcomeMessage.payload.session.id;
-                Log.Information($"Twitch websocket session id: {_websocketSessionId}");
+                Log.Information("[{Source}] {Message}", "EventSub",$"Twitch websocket session id: {_websocketSessionId}");
+
             }
             // Handle keepalive
             else if (json.RootElement.GetProperty("metadata").GetProperty("message_type").GetString() ==
@@ -222,18 +220,19 @@ internal class EventSub
                         await ChannelChatMessage(chatMessage);
                         break;
                     default:
-                        Log.Warning($"Invalid Subscription: {json.RootElement}");
+                        Log.Warning("[{Source}] {Message}", "EventSub", $"Invalid Subscription: {json.RootElement}");
                         break;
                 }
             }
             else
             {
-                Log.Warning($"ListenToWebsocket Invalid Request: {json.RootElement}");
+                Log.Warning("[{Source}] {Message}", "EventSub", $"ListenToWebsocket Invalid Request: {json.RootElement}");
+
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error in ProcessNotification");
+            Log.Error(ex, "[{Source}]", "ProcessNotification");
         }
     }
 
@@ -273,6 +272,7 @@ internal class EventSub
         catch (Exception e)
         {
             Log.Error(e, "Error on chatMessage");
+            Log.Error(e, "[{Source}]", "chatMessage");
         }
     }
 
@@ -291,7 +291,7 @@ internal class EventSub
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error on streamOffline");
+            Log.Error(e, "[{Source}]", "streamOffline");
         }
     }
 
@@ -313,7 +313,7 @@ internal class EventSub
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error on streamOnline");
+            Log.Error(e, "[{Source}]", "streamOnline");
         }
     }
 
@@ -337,7 +337,7 @@ internal class EventSub
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error on channelUpdate");
+            Log.Error(e, "[{Source}]", "channelUpdate");
         }
     }
 }

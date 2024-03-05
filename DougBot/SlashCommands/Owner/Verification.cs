@@ -79,7 +79,7 @@ public class Verification : InteractionModuleBase
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error in Verification.verify");
+            Log.Error(e, "[{Source}]",  "Verification.verify");
         }
     }
 

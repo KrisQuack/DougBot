@@ -55,7 +55,7 @@ public class AuditLogUserJoined : INotificationHandler<UserJoinedNotification>
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_UserJoined");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_UserJoined");
             }
         });
     }
@@ -90,7 +90,7 @@ public class AuditLogUserLeft : INotificationHandler<UserLeftNotification>
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_UserLeft");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_UserLeft");
             }
         });
     }
@@ -180,7 +180,7 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_GuildMemberUpdated");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_GuildMemberUpdated");
             }
         });
     }
@@ -215,7 +215,7 @@ public class AuditLogMessageReceived : INotificationHandler<MessageReceivedNotif
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_MessageReceived");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageReceived");
             }
         });
     }
@@ -269,7 +269,7 @@ public class AuditLogMessageDeleted : INotificationHandler<MessageDeletedNotific
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_MessageDeleted");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageDeleted");
             }
         });
     }
@@ -331,7 +331,7 @@ public class AuditLogMessageUpdated : INotificationHandler<MessageUpdatedNotific
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error in AuditLog_MessageUpdated");
+                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageUpdated");
             }
         });
     }
@@ -350,17 +350,16 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
             {
                 try
                 {
-                    var response = "Database Sync Started\n";
+                    var response = "";
                     var timer = new Stopwatch();
                     timer.Start();
                     //Get values
                     var cutoff = DateTime.UtcNow.AddHours(-1);
                     var guild = notification.Client.Guilds.FirstOrDefault();
-                    var members = guild.Users;
                     var channels = guild.TextChannels.ToList();
                     var mongo = new Mongo();
                     response +=
-                        $"**{timer.Elapsed.TotalSeconds}**\nMembers: {members.Count}\nChannels: {channels.Count}\n";
+                        $"**{timer.Elapsed.TotalSeconds}**\nMembers: {guild.Users.Count}\nChannels: {channels.Count}\n";
                     // Remove inactive channels
                     var activeChannels = new List<SocketTextChannel>();
                     foreach (var channel in channels)
@@ -408,7 +407,7 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                             }
                             catch (Exception e)
                             {
-                                Log.Error(e, "Error in database sync");
+                                Log.Error(e, "[{Source}]",  "Database Sync");
                             }
                     }
 
@@ -417,7 +416,7 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     // For each member, check if they are in the database, if not add them
                     var memberCount = 0;
                     var dbMembers = await mongo.GetAllMembers();
-                    foreach (var member in members)
+                    foreach (var member in guild.Users)
                         try
                         {
                             var dbMember = dbMembers.FirstOrDefault(x => x["_id"].AsString == member.Id.ToString());
@@ -481,18 +480,19 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                         }
                         catch (Exception e)
                         {
-                            Log.Error(e, "Error in database sync");
+                            Log.Error(e, "[{Source}]",  "Database Sync");
                         }
 
                     timer.Stop();
                     response += $"**{timer.Elapsed.TotalSeconds}**\nMembers added/updated to Database: {memberCount}\n";
 
                     // Log the response
-                    Log.Information(response);
+                    if(memberCount > 0 || messageCount > 0)
+                        Log.Information("[{Source}] {Message}", "Database Sync", response);
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Error in database sync");
+                    Log.Error(e, "[{Source}]",  "Database Sync");
                 }
 
                 // Wait 30 minutes

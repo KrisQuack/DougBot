@@ -95,7 +95,7 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Error in Youtube_ReadyHandler");
+                    Log.Error(e, "[{Source}]",  "Youtube_ReadyHandler");
                 }
 
                 // Sleep 5 minutes

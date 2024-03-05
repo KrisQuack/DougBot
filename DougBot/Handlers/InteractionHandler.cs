@@ -5,7 +5,7 @@ using Discord.WebSocket;
 using DougBot.Shared;
 using Serilog;
 
-namespace DougBot.Discord;
+namespace DougBot.Handlers;
 
 public class InteractionHandler
 {
@@ -49,7 +49,7 @@ public class InteractionHandler
             var result = await _handler.ExecuteCommandAsync(context, _services);
 
             if (!result.IsSuccess)
-                Log.Error(result.ErrorReason);
+                Log.Error("[{Source}] {Message}", "Interaction",result.ErrorReason);
             switch (result.Error)
             {
                 case InteractionCommandError.UnmetPrecondition:
@@ -68,7 +68,7 @@ public class InteractionHandler
     {
         if (!result.IsSuccess)
         {
-            Log.Error($"An error occurred while executing the slash command {commandInfo.Name}: {result.ErrorReason}");
+            Log.Error("[{Source}] {Message}",commandInfo.Name, result.ErrorReason);
             switch (result.Error)
             {
                 case InteractionCommandError.UnmetPrecondition:

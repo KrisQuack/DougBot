@@ -1,8 +1,8 @@
 ﻿using Discord;
 using DougBot.Discord.Notifications;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using MediatR;
-using MongoDB.Bson;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Discord.Modules;
@@ -17,12 +17,13 @@ public class ReactionFilterReadyHandler : INotificationHandler<ReadyNotification
             {
                 try
                 {
+                    await using var db = new DougBotContext();
                     var guild = notification.Client.Guilds.FirstOrDefault();
-                    var settings = await new Mongo().GetBotSettings();
+                    var settings = await db.Botsettings.FirstOrDefaultAsync();
                     var guildEmotes = guild.Emotes;
-                    var emoteWhitelist = (BsonArray)settings["reaction_filter_emotes"];
-                    var filterChannelIds = (BsonArray)settings["reaction_filter_channels"];
-                    var filterChannels = guild.TextChannels.Where(x => filterChannelIds.Contains(x.Id.ToString()));
+                    var emoteWhitelist = settings.ReactionFilterEmotes;
+                    var filterChannelIds = settings.ReactionFilterChannels;
+                    var filterChannels = guild.TextChannels.Where(x => filterChannelIds.Contains(x.Id));
                     // Add the guild's emotes to the whitelist
                     foreach (var emote in guildEmotes)
                         if (!emoteWhitelist.Contains(emote.Name))
@@ -58,12 +59,13 @@ public class ReactionFilterReadyHandler : INotificationHandler<ReadyNotification
                         foreach (var message in removedReactions.Select(x => x.Item1).Distinct())
                             response +=
                                 $"\nMessage {message.GetJumpUrl()}\n{string.Join("\n", removedReactions.Where(x => x.Item1 == message).Select(x => x.Item2))}";
-                        if (removedReactions.Count > 0) Log.Information("[{Source}] {Message}", "Reaction Filter", response);
+                        if (removedReactions.Count > 0)
+                            Log.Information("[{Source}] {Message}", "Reaction Filter", response);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[{Source}]",  "ReactionFilter_ReadyHandler");
+                    Log.Error(ex, "[{Source}]", "ReactionFilter_ReadyHandler");
                 }
 
                 // Sleep for 10 minutes

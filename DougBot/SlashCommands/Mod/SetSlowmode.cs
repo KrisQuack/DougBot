@@ -9,7 +9,8 @@ public class SetSlowmode : InteractionModuleBase
     [EnabledInDm(false)]
     [RequireUserPermission(GuildPermission.ModerateMembers)]
     public async Task Task([Summary(description: "The channel to set the slow mode in")] ITextChannel channel,
-        [Summary(description: "The amount of seconds to set the slow mode to")] [MaxValue(21600)] int seconds)
+        [Summary(description: "The amount of seconds to set the slow mode to")] [MaxValue(21600)]
+        int seconds)
     {
         await channel.ModifyAsync(x => x.SlowModeInterval = seconds);
         await RespondAsync($"Set slow mode to {seconds} seconds in {channel.Mention}", ephemeral: true);

@@ -2,6 +2,7 @@
 using Discord.Interactions;
 using Discord.WebSocket;
 using DougBot.Handlers;
+using DougBot.Shared.Database;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -27,6 +28,7 @@ public class DiscordBot
     private static ServiceProvider ConfigureServices()
     {
         return new ServiceCollection()
+            .AddDbContext<DougBotContext>()
             .AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DiscordBot).Assembly))
             .AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
             {
@@ -76,7 +78,11 @@ public class DiscordBot
         var interactionHandler = services.GetRequiredService<InteractionHandler>();
         await interactionHandler.InitializeAsync();
 
-        await _client.LoginAsync(TokenType.Bot, Environment.GetEnvironmentVariable("TOKEN"));
+        // Get the token
+        await using var db = new DougBotContext();
+        var token = db.Botsettings.FirstOrDefault().DiscordToken;
+
+        await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
 
         await Task.Delay(Timeout.Infinite);

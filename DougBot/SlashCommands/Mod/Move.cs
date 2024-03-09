@@ -14,7 +14,8 @@ public class Move : InteractionModuleBase
     [EnabledInDm(false)]
     [RequireUserPermission(GuildPermission.ModerateMembers)]
     public async Task Task([Summary(description: "The ID of the message")] string message,
-        [Summary(description: "The channel to move it to")] IChannel channel)
+        [Summary(description: "The channel to move it to")]
+        IChannel channel)
     {
         // Send a response to the user indicating the message is being moved
         await RespondAsync("Moving the message", ephemeral: true);

@@ -3,9 +3,9 @@ using System.Text;
 using System.Text.Json;
 using Discord;
 using Discord.WebSocket;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using DougBot.Twitch.Models;
-using MongoDB.Bson;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using TwitchLib.Api;
 using TwitchLib.Api.Core.Enums;
@@ -23,7 +23,7 @@ internal class EventSub
     private DiscordSocketClient _client;
     private User _dougUser;
     private DateTime _lastKeepalive = DateTime.UtcNow;
-    private BsonDocument _settings;
+    private Botsetting _settings;
 
     private TwitchAPI _twitchApi;
     private ClientWebSocket? _websocketClient;
@@ -33,10 +33,11 @@ internal class EventSub
     {
         _client = client;
         _twitchApi = twitchApi;
-        _settings = await new Mongo().GetBotSettings();
+        await using var db = new DougBotContext();
+        _settings = await db.Botsettings.FirstOrDefaultAsync();
         // Get the bot and doug user
-        var botUser = await _twitchApi.Helix.Users.GetUsersAsync(logins: [_settings["twitch_bot_name"].AsString]);
-        var dougUser = await _twitchApi.Helix.Users.GetUsersAsync(logins: [_settings["twitch_channel_name"].AsString]);
+        var botUser = await _twitchApi.Helix.Users.GetUsersAsync(logins: [_settings.TwitchBotName]);
+        var dougUser = await _twitchApi.Helix.Users.GetUsersAsync(logins: [_settings.TwitchChannelName]);
         _botUser = botUser.Users[0];
         _dougUser = dougUser.Users[0];
         // Listen to the websocket
@@ -50,7 +51,8 @@ internal class EventSub
                 await _twitchApi.Helix.EventSub.DeleteEventSubSubscriptionAsync(sub.Id);
             // Make sure the websocket is closed
             if (_websocketClient != null && _websocketClient.State == WebSocketState.Open)
-                await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing",
+                    CancellationToken.None);
             // Connect to the websocket and print the response
             _websocketClient = new ClientWebSocket();
             await _websocketClient.ConnectAsync(new Uri(WebsocketBaseUrl), CancellationToken.None);
@@ -103,7 +105,8 @@ internal class EventSub
                 {
                     await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Keepalive",
                         CancellationToken.None);
-                    Log.Warning("[{Source}] {Message}", "EventSub", $"Websocket closed due to keepalive timeout: {_lastKeepalive:hh:mm:ss}");
+                    Log.Warning("[{Source}] {Message}", "EventSub",
+                        $"Websocket closed due to keepalive timeout: {_lastKeepalive:hh:mm:ss}");
                     break;
                 }
 
@@ -114,10 +117,13 @@ internal class EventSub
                     // Check if any are not "enabled"
                     if (subscriptions.Subscriptions.Any(sub => sub.Status != "enabled"))
                     {
-                        Log.Warning("[{Source}] {Message}", "EventSub", $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
+                        Log.Warning("[{Source}] {Message}", "EventSub",
+                            $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
                         break;
                     }
-                    Log.Information("[{Source}] {Message}", "EventSub", $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
+
+                    Log.Information("[{Source}] {Message}", "EventSub",
+                        $"Subscriptions:\n{string.Join(Environment.NewLine, subscriptions.Subscriptions.Select(sub => $"{sub.Type} - {sub.Status}"))}");
                     lastStatus = DateTime.UtcNow;
                 }
 
@@ -159,7 +165,7 @@ internal class EventSub
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[{Source}]","ListenToWebsocket");
+                    Log.Error(ex, "[{Source}]", "ListenToWebsocket");
                 }
         });
     }
@@ -188,8 +194,8 @@ internal class EventSub
             {
                 var welcomeMessage = JsonSerializer.Deserialize<WebsocketWelcome.Root>(response);
                 _websocketSessionId = welcomeMessage.payload.session.id;
-                Log.Information("[{Source}] {Message}", "EventSub",$"Twitch websocket session id: {_websocketSessionId}");
-
+                Log.Information("[{Source}] {Message}", "EventSub",
+                    $"Twitch websocket session id: {_websocketSessionId}");
             }
             // Handle keepalive
             else if (json.RootElement.GetProperty("metadata").GetProperty("message_type").GetString() ==
@@ -226,8 +232,8 @@ internal class EventSub
             }
             else
             {
-                Log.Warning("[{Source}] {Message}", "EventSub", $"ListenToWebsocket Invalid Request: {json.RootElement}");
-
+                Log.Warning("[{Source}] {Message}", "EventSub",
+                    $"ListenToWebsocket Invalid Request: {json.RootElement}");
             }
         }
         catch (Exception ex)
@@ -245,11 +251,12 @@ internal class EventSub
                 "a5b9d1c7-44f9-4964-b0f7-42c39cb04f98")
             {
                 // Get the user
-                var dbUser = await new Mongo().GetMemberByMcRedeem(chatMessage.payload.Event.message.text);
+                var db = new DougBotContext();
+                var dbUser = await db.Members.FirstOrDefaultAsync(x => x.McRedeem == chatMessage.payload.Event.message.text);
                 if (dbUser != null)
                 {
                     var guild = _client.Guilds.FirstOrDefault();
-                    var discordUser = guild.GetUser(Convert.ToUInt64(dbUser["_id"]));
+                    var discordUser = guild.GetUser(Convert.ToUInt64(dbUser.Id));
                     if (discordUser != null)
                     {
                         // Add the roles
@@ -262,7 +269,7 @@ internal class EventSub
                         await mcChannel.SendMessageAsync(
                             $"{discordUser.Mention} Redemption successful, Please link your minecraft account using the instructions in <#743938486888824923>");
 
-                        var modChannel = guild.GetTextChannel(Convert.ToUInt64(_settings["twitch_mod_channel_id"]));
+                        var modChannel = guild.GetTextChannel(Convert.ToUInt64(_settings.TwitchModChannelId));
                         await modChannel.SendMessageAsync(
                             $"Minecraft redemption successful, Please approve in the redemption queue\nTwitch: **{chatMessage.payload.Event.chatter_user_login}**\nDiscord:{discordUser.Mention}");
                     }

@@ -2,9 +2,9 @@
 using Discord;
 using Discord.WebSocket;
 using DougBot.Discord.Notifications;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using MediatR;
-using MongoDB.Bson;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Discord.Modules;
@@ -17,6 +17,8 @@ public class AuditLogUserJoined : INotificationHandler<UserJoinedNotification>
         {
             try
             {
+                // Declare database context
+                await using var db = new DougBotContext();
                 // Print an embed
                 var embed = new EmbedBuilder()
                     .WithTitle("User Joined")
@@ -28,34 +30,34 @@ public class AuditLogUserJoined : INotificationHandler<UserJoinedNotification>
                         " days")
                     .WithTimestamp(DateTime.UtcNow)
                     .Build();
-                var settings = await new Mongo().GetBotSettings();
-                await notification.User.Guild.GetTextChannel(Convert.ToUInt64(settings["log_channel_id"]))
+                var settings = await db.Botsettings.FirstOrDefaultAsync();
+                await notification.User.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
                     .SendMessageAsync(embed: embed);
                 // Save to database
-                var member = await new Mongo().GetMember(notification.User.Id);
+                var member = await db.Members.FirstOrDefaultAsync(m => m.Id == notification.User.Id);
                 if (member == null)
                 {
                     var guildMember = notification.User;
-                    var newMember = new BsonDocument
+                    var rolesList = guildMember.Roles.Select(role => role.Id).ToList();
+                    var roleDecimals = rolesList.ConvertAll(x => (decimal)x);
+                    await db.Members.AddAsync(new Member
                     {
-                        { "_id", guildMember.Id.ToString() },
-                        { "name", guildMember.Username != null ? guildMember.Username : BsonNull.Value },
-                        { "global_name", guildMember.GlobalName != null ? guildMember.GlobalName : BsonNull.Value },
-                        { "nick", guildMember.Nickname != null ? guildMember.Nickname : BsonNull.Value },
-                        { "roles", new BsonArray(guildMember.Roles.Select(role => role.Id.ToString())) },
-                        {
-                            "joined_at",
-                            guildMember.JoinedAt.HasValue ? guildMember.JoinedAt.Value.UtcDateTime : BsonNull.Value
-                        },
-                        { "created_at", guildMember.CreatedAt.UtcDateTime },
-                        { "edits", new BsonArray() }
-                    };
-                    await new Mongo().InsertMember(newMember);
+                        Id = guildMember.Id,
+                        Username = guildMember.Username,
+                        GlobalName = guildMember.GlobalName,
+                        Nickname = guildMember.Nickname,
+                        Roles = roleDecimals,
+                        JoinedAt = guildMember.JoinedAt.HasValue
+                            ? guildMember.JoinedAt.Value.UtcDateTime
+                            : DateTime.UtcNow,
+                        CreatedAt = guildMember.CreatedAt.UtcDateTime
+                    });
+                    await db.SaveChangesAsync();
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_UserJoined");
+                Log.Error(ex, "[{Source}]", "AuditLog_UserJoined");
             }
         });
     }
@@ -69,6 +71,8 @@ public class AuditLogUserLeft : INotificationHandler<UserLeftNotification>
         {
             try
             {
+                // declare database context
+                await using var db = new DougBotContext();
                 // Print an embed
                 var embed = new EmbedBuilder()
                     .WithTitle("User Left")
@@ -77,20 +81,22 @@ public class AuditLogUserLeft : INotificationHandler<UserLeftNotification>
                         notification.User.GetAvatarUrl())
                     .WithTimestamp(DateTime.UtcNow)
                     .Build();
-                var settings = await new Mongo().GetBotSettings();
-                await notification.Guild.GetTextChannel(Convert.ToUInt64(settings["log_channel_id"]))
+                var settings = await db.Botsettings.FirstOrDefaultAsync();
+                await notification.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
                     .SendMessageAsync(embed: embed);
                 // Update the database
-                var member = await new Mongo().GetMember(notification.User.Id);
-                if (member != null)
+                var memberUpdate = new MemberUpdate
                 {
-                    member["left_at"] = DateTime.UtcNow;
-                    await new Mongo().UpdateMember(member);
-                }
+                    MemberId = notification.User.Id,
+                    ColumnName = "left",
+                    UpdateTimestamp = DateTime.UtcNow
+                };
+                await db.MemberUpdates.AddAsync(memberUpdate);
+                await db.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_UserLeft");
+                Log.Error(ex, "[{Source}]", "AuditLog_UserLeft");
             }
         });
     }
@@ -104,83 +110,90 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
         {
             try
             {
+                // declare database context
+                await using var db = new DougBotContext();
                 // get the before and after states
                 var after = notification.NewUser;
                 // Load the user's dictionary
-                var userDict = await new Mongo().GetMember(after.Id);
-                if (userDict == null) return;
+                var dbUser = await db.Members.FirstOrDefaultAsync(m => m.Id == after.Id);
+                if (dbUser == null) return;
                 // Load the embed
                 var embed = new EmbedBuilder()
                     .WithTitle("Member Updated")
                     .WithAuthor($"{after.Username} ({after.Id})", after.GetAvatarUrl())
                     .WithColor(Color.Orange);
                 // Get the roles
-                var beforeRoles = userDict["roles"].AsBsonArray.Select(role => role.ToString()).ToHashSet();
-                var afterRoles = after.Roles.Select(role => role.Id.ToString()).ToHashSet();
+                var beforeRoles = dbUser.Roles.Select(r => r);
+                var afterRoles = after.Roles.Select(role => (decimal)role.Id).ToHashSet();
                 var addedRoles = afterRoles.Except(beforeRoles).ToList();
                 var removedRoles = beforeRoles.Except(afterRoles).ToList();
 
-                var updateLog = new BsonDocument
-                {
-                    { "timestamp", DateTime.UtcNow },
-                    { "changes", new BsonDocument() }
-                };
                 // Check each value, if it is changed add to embed and update database
-                if ((userDict["nick"] == BsonNull.Value ? null : userDict["nick"]) != after.Nickname)
+                if (dbUser.Nickname != after.Nickname)
                 {
-                    embed.AddField("Nickname", $"{userDict["nick"]} -> {after.Nickname}");
-                    updateLog["changes"]["nick"] = after.Nickname == null ? BsonNull.Value : after.Nickname;
-                    userDict["nick"] = after.Nickname == null ? BsonNull.Value : after.Nickname;
+                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                    {
+                        MemberId = after.Id,
+                        ColumnName = "nickname",
+                        PreviousValue = dbUser.Nickname,
+                        NewValue = after.Nickname,
+                        UpdateTimestamp = DateTime.UtcNow
+                    });
+                    dbUser.Nickname = after.Nickname;
                 }
 
-                if ((userDict["name"] == BsonNull.Value ? null : userDict["name"]) != after.Username)
+                if (dbUser.Username != after.Username)
                 {
-                    embed.AddField("Name", $"{userDict["name"]} -> {after.Username}");
-                    updateLog["changes"]["name"] = after.Username == null ? BsonNull.Value : after.Username;
-                    userDict["name"] = after.Username == null ? BsonNull.Value : after.Username;
+                    dbUser.Username = after.Username;
+                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                    {
+                        MemberId = after.Id,
+                        ColumnName = "username",
+                        PreviousValue = dbUser.Username,
+                        NewValue = after.Username,
+                        UpdateTimestamp = DateTime.UtcNow
+                    });
                 }
 
-                if ((userDict["global_name"] == BsonNull.Value ? null : userDict["global_name"]) != after.GlobalName)
+                if (dbUser.GlobalName != after.GlobalName)
                 {
-                    embed.AddField("Global Name", $"{userDict["global_name"]} -> {after.GlobalName}");
-                    updateLog["changes"]["global_name"] = after.GlobalName == null ? BsonNull.Value : after.GlobalName;
-                    userDict["global_name"] = after.GlobalName == null ? BsonNull.Value : after.GlobalName;
+                    dbUser.GlobalName = after.GlobalName;
+                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                    {
+                        MemberId = after.Id,
+                        ColumnName = "global_name",
+                        PreviousValue = dbUser.GlobalName,
+                        NewValue = after.GlobalName,
+                        UpdateTimestamp = DateTime.UtcNow
+                    });
                 }
 
                 if (addedRoles.Any() || removedRoles.Any())
                 {
-                    if (addedRoles.Any())
-                        embed.AddField("Roles Added", string.Join(", ", addedRoles.Select(role => $"<@&{role}>")));
-                    if (removedRoles.Any())
-                        embed.AddField("Roles Removed", string.Join(", ", removedRoles.Select(role => $"<@&{role}>")));
-                    updateLog["changes"]["roles"] = new BsonDocument
+                    dbUser.Roles = afterRoles.Select(x => Convert.ToDecimal(x)).ToList();
+                    await db.MemberUpdates.AddAsync(new MemberUpdate
                     {
-                        { "added", new BsonArray(addedRoles) },
-                        { "removed", new BsonArray(removedRoles) }
-                    };
-                    userDict["roles"] = new BsonArray(after.Roles.Select(role => role.Id.ToString()));
+                        MemberId = after.Id,
+                        ColumnName = "roles",
+                        PreviousValue = string.Join(", ", beforeRoles),
+                        NewValue = string.Join(", ", afterRoles),
+                        UpdateTimestamp = DateTime.UtcNow
+                    });
                 }
 
                 // Send the embed
                 if (embed.Fields.Any())
                 {
-                    var settings = await new Mongo().GetBotSettings();
-                    await notification.NewUser.Guild.GetTextChannel(Convert.ToUInt64(settings["log_channel_id"]))
+                    var settings = await db.Botsettings.FirstOrDefaultAsync();
+                    await notification.NewUser.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
                         .SendMessageAsync(embed: embed.Build());
                 }
 
-                // Update the database
-                if (updateLog["changes"].AsBsonDocument.ElementCount > 0)
-                {
-                    // Append the update log to the member's edits array
-                    if (!userDict.Contains("edits")) userDict["edits"] = new BsonArray();
-                    userDict["edits"].AsBsonArray.Add(updateLog);
-                    await new Mongo().UpdateMember(userDict);
-                }
+                await db.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_GuildMemberUpdated");
+                Log.Error(ex, "[{Source}]", "AuditLog_GuildMemberUpdated");
             }
         });
     }
@@ -195,27 +208,28 @@ public class AuditLogMessageReceived : INotificationHandler<MessageReceivedNotif
             try
             {
                 if (notification.Message.Author.IsBot || notification.Message.Author.IsWebhook) return;
+                // declare database context
+                await using var db = new DougBotContext();
                 // Add to database
-                var message = await new Mongo().GetMessage(notification.Message.Id);
-                if (message == null)
+                var dbMessage = await db.Messages.FirstOrDefaultAsync(m => m.Id == notification.Message.Id);
+                if (dbMessage == null)
                 {
                     var guildMessage = notification.Message;
-                    var newMessage = new BsonDocument
+                    await db.Messages.AddAsync(new Message
                     {
-                        { "_id", guildMessage.Id.ToString() },
-                        { "channel_id", guildMessage.Channel.Id.ToString() },
-                        { "user_id", guildMessage.Author.Id.ToString() },
-                        { "content", guildMessage.Content },
-                        { "attachments", new BsonArray(guildMessage.Attachments.Select(attachment => attachment.Url)) },
-                        { "created_at", notification.Message.CreatedAt.UtcDateTime },
-                        { "edits", new BsonArray() }
-                    };
-                    await new Mongo().InsertMessage(newMessage);
+                        Id = guildMessage.Id,
+                        ChannelId = guildMessage.Channel.Id,
+                        MemberId = guildMessage.Author.Id,
+                        Content = guildMessage.Content,
+                        Attachments = guildMessage.Attachments.Select(attachment => attachment.Url).ToList(),
+                        CreatedAt = guildMessage.CreatedAt.UtcDateTime
+                    });
+                    await db.SaveChangesAsync();
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageReceived");
+                Log.Error(ex, "[{Source}]", "AuditLog_MessageReceived");
             }
         });
     }
@@ -232,6 +246,8 @@ public class AuditLogMessageDeleted : INotificationHandler<MessageDeletedNotific
                 if (!notification.Message.HasValue) return;
                 if (notification.Message.Value.Author.IsBot || notification.Message.Value.Author.IsWebhook) return;
                 var message = notification.Message.Value;
+                // declare database context
+                await using var db = new DougBotContext();
                 // Print an embed
                 var embeds = new List<Embed>();
                 var embed = new EmbedBuilder()
@@ -256,20 +272,21 @@ public class AuditLogMessageDeleted : INotificationHandler<MessageDeletedNotific
                         );
                 // Send the embeds
                 var channel = (SocketGuildChannel)notification.Channel.Value;
-                var settings = await new Mongo().GetBotSettings();
-                await channel.Guild.GetTextChannel(Convert.ToUInt64(settings["log_channel_id"]))
+                var settings = await db.Botsettings.FirstOrDefaultAsync();
+                await channel.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
                     .SendMessageAsync(embeds: embeds.ToArray());
                 // Update the database
-                var dbMessage = await new Mongo().GetMessage(notification.Message.Id);
-                if (dbMessage != null)
+                await db.MessageUpdates.AddAsync(new MessageUpdate
                 {
-                    dbMessage["deleted_at"] = DateTime.UtcNow;
-                    await new Mongo().UpdateMessage(dbMessage);
-                }
+                    MessageId = message.Id,
+                    ColumnName = "deleted",
+                    UpdateTimestamp = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageDeleted");
+                Log.Error(ex, "[{Source}]", "AuditLog_MessageDeleted");
             }
         });
     }
@@ -286,16 +303,13 @@ public class AuditLogMessageUpdated : INotificationHandler<MessageUpdatedNotific
                 if (notification.NewMessage == null || notification.NewMessage.Author == null ||
                     notification.NewMessage.Author.IsBot || notification.NewMessage.Author.IsWebhook) return;
                 if (notification.Channel == null) return;
+                // declare database context
+                await using var db = new DougBotContext();
                 // Get the before and after states
                 var after = notification.NewMessage;
                 // Get the message from the database
-                var dbMessage = await new Mongo().GetMessage(notification.NewMessage.Id);
+                var dbMessage = await db.Messages.FirstOrDefaultAsync(m => m.Id == after.Id);
                 if (dbMessage == null) return;
-                var updateLog = new BsonDocument
-                {
-                    { "timestamp", DateTime.UtcNow },
-                    { "changes", new BsonDocument() }
-                };
                 // Print an embed
                 var embed = new EmbedBuilder()
                     .WithTitle($"Message Updated in {after.Channel.Name}")
@@ -303,35 +317,39 @@ public class AuditLogMessageUpdated : INotificationHandler<MessageUpdatedNotific
                     .WithColor(Color.Orange)
                     .WithAuthor($"{after.Author.Username} ({after.Author.Id})", after.Author.GetAvatarUrl())
                     .WithTimestamp(DateTime.UtcNow);
-                if (dbMessage["content"] != after.Content)
-                    if (!string.IsNullOrEmpty(dbMessage["content"].ToString()) && !string.IsNullOrEmpty(after.Content))
+
+                if (dbMessage.Content != after.Content)
+                    if (!string.IsNullOrEmpty(dbMessage.Content) && !string.IsNullOrEmpty(after.Content))
                     {
-                        embed.AddField("Content", dbMessage["content"]);
+                        embed.AddField("Content", dbMessage.Content);
                         embed.AddField("Updated Content", after.Content);
-                        updateLog["changes"]["content"] = after.Content;
-                        dbMessage["content"] = after.Content;
+
+                        await db.MessageUpdates.AddAsync(new MessageUpdate
+                        {
+                            MessageId = after.Id,
+                            ColumnName = "content",
+                            PreviousValue = dbMessage.Content,
+                            NewValue = after.Content,
+                            UpdateTimestamp = DateTime.UtcNow
+                        });
+                        dbMessage.Content = after.Content;
                     }
 
                 // Send the embed
                 if (embed.Fields.Any())
                 {
                     var channel = (SocketGuildChannel)notification.Channel;
-                    var settings = await new Mongo().GetBotSettings();
-                    await channel.Guild.GetTextChannel(Convert.ToUInt64(settings["log_channel_id"]))
+                    var settings = await db.Botsettings.FirstOrDefaultAsync();
+                    await channel.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
                         .SendMessageAsync(embed: embed.Build());
                 }
 
                 // Update the database
-                if (updateLog["changes"].AsBsonDocument.ElementCount > 0)
-                {
-                    if (!dbMessage.Contains("edits")) dbMessage["edits"] = new BsonArray();
-                    dbMessage["edits"].AsBsonArray.Add(updateLog);
-                    await new Mongo().UpdateMessage(dbMessage);
-                }
+                await db.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[{Source}]" ,"AuditLog_MessageUpdated");
+                Log.Error(ex, "[{Source}]", "AuditLog_MessageUpdated");
             }
         });
     }
@@ -350,6 +368,8 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
             {
                 try
                 {
+                    // declare database context
+                    await using var db = new DougBotContext();
                     var response = "";
                     var timer = new Stopwatch();
                     timer.Start();
@@ -357,7 +377,6 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     var cutoff = DateTime.UtcNow.AddHours(-1);
                     var guild = notification.Client.Guilds.FirstOrDefault();
                     var channels = guild.TextChannels.ToList();
-                    var mongo = new Mongo();
                     response +=
                         $"**{timer.Elapsed.TotalSeconds}**\nMembers: {guild.Users.Count}\nChannels: {channels.Count}\n";
                     // Remove inactive channels
@@ -378,121 +397,142 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     {
                         var messages = await channel.GetMessagesAsync(1000).FlattenAsync();
                         messages = messages.Where(x => !x.Author.IsBot && x.CreatedAt > cutoff);
-                        var dbMessages = await mongo.GetMessagesByQuery(channel.Id.ToString(), cutoff);
-                        messages = messages.Where(x => !dbMessages.Any(y => y["_id"].AsString == x.Id.ToString()));
+                        var dbMessages = await db.Messages.Where(m => m.ChannelId == channel.Id && m.CreatedAt > cutoff)
+                            .ToListAsync();
+                        messages = messages.Where(x => !dbMessages.Any(y => y.Id == x.Id));
                         foreach (var message in messages)
                             try
                             {
                                 if (!message.Author.IsBot)
                                 {
-                                    // Check if the message is in the database, if not add it
-                                    var dbMessage =
-                                        dbMessages.FirstOrDefault(x => x["_id"].AsString == message.Id.ToString());
-                                    var newMessage = new BsonDocument
+                                    await db.Messages.AddAsync(new Message
                                     {
-                                        { "_id", message.Id.ToString() },
-                                        { "channel_id", message.Channel.Id.ToString() },
-                                        { "user_id", message.Author.Id.ToString() },
-                                        { "content", message.Content },
-                                        {
-                                            "attachments",
-                                            new BsonArray(message.Attachments.Select(attachment => attachment.Url))
-                                        },
-                                        { "created_at", message.CreatedAt.UtcDateTime },
-                                        { "edits", new BsonArray() }
-                                    };
-                                    await mongo.InsertMessage(newMessage);
+                                        Id = message.Id,
+                                        ChannelId = message.Channel.Id,
+                                        MemberId = message.Author.Id,
+                                        Content = message.Content,
+                                        Attachments = message.Attachments.Select(attachment => attachment.Url).ToList(),
+                                        CreatedAt = message.CreatedAt.UtcDateTime
+                                    });
                                     messageCount++;
                                 }
                             }
                             catch (Exception e)
                             {
-                                Log.Error(e, "[{Source}]",  "Database Sync");
+                                Log.Error(e, "[{Source}]", "Database Sync");
                             }
                     }
+
+                    await db.SaveChangesAsync();
 
                     response += $"**{timer.Elapsed.TotalSeconds}**\nMessages added to Database: {messageCount}\n";
 
                     // For each member, check if they are in the database, if not add them
                     var memberCount = 0;
-                    var dbMembers = await mongo.GetAllMembers();
+                    var dbMembers = await db.Members.ToListAsync();
                     foreach (var member in guild.Users)
                         try
                         {
-                            var dbMember = dbMembers.FirstOrDefault(x => x["_id"].AsString == member.Id.ToString());
+                            var dbMember = dbMembers.FirstOrDefault(x => x.Id == member.Id);
                             if (dbMember == null)
                             {
-                                var newMember = new BsonDocument
+                                var rolesList = member.Roles.Select(role => role.Id).ToList();
+                                var roleDecimals = rolesList.ConvertAll(x => (decimal)x);
+                                await db.Members.AddAsync(new Member
                                 {
-                                    { "_id", member.Id.ToString() },
-                                    { "name", member.Username != null ? member.Username : BsonNull.Value },
-                                    { "global_name", member.GlobalName != null ? member.GlobalName : BsonNull.Value },
-                                    { "nick", member.Nickname != null ? member.Nickname : BsonNull.Value },
-                                    { "roles", new BsonArray(member.Roles.Select(role => role.Id.ToString())) },
-                                    {
-                                        "joined_at",
-                                        member.JoinedAt.HasValue ? member.JoinedAt.Value.UtcDateTime : BsonNull.Value
-                                    },
-                                    { "created_at", member.CreatedAt.UtcDateTime },
-                                    { "edits", new BsonArray() }
-                                };
-                                await mongo.InsertMember(newMember);
+                                    Id = member.Id,
+                                    Username = member.Username,
+                                    GlobalName = member.GlobalName,
+                                    Nickname = member.Nickname,
+                                    Roles = roleDecimals,
+                                    JoinedAt = member.JoinedAt.HasValue
+                                        ? member.JoinedAt.Value.UtcDateTime
+                                        : DateTime.UtcNow,
+                                    CreatedAt = member.CreatedAt.UtcDateTime
+                                });
                                 memberCount++;
                             }
                             else
                             {
                                 // Check if any value has changed
-                                var hasChanged = false;
-                                if ((dbMember["name"] == BsonNull.Value ? null : dbMember["name"]) != member.Username)
+                                if (dbMember.Nickname != member.Nickname)
                                 {
-                                    dbMember["name"] = member.Username != null ? member.Username : BsonNull.Value;
-                                    hasChanged = true;
+                                    dbMember.Nickname = member.Nickname;
+                                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                                    {
+                                        MemberId = member.Id,
+                                        ColumnName = "nickname",
+                                        PreviousValue = dbMember.Nickname,
+                                        NewValue = member.Nickname,
+                                        UpdateTimestamp = DateTime.UtcNow
+                                    });
+                                    memberCount++;
                                 }
 
-                                if ((dbMember["global_name"] == BsonNull.Value ? null : dbMember["global_name"]) !=
-                                    member.GlobalName)
+                                if (dbMember.Username != member.Username)
                                 {
-                                    dbMember["global_name"] =
-                                        member.GlobalName != null ? member.GlobalName : BsonNull.Value;
-                                    hasChanged = true;
+                                    dbMember.Username = member.Username;
+                                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                                    {
+                                        MemberId = member.Id,
+                                        ColumnName = "username",
+                                        PreviousValue = dbMember.Username,
+                                        NewValue = member.Username,
+                                        UpdateTimestamp = DateTime.UtcNow
+                                    });
+                                    memberCount++;
                                 }
 
-                                if ((dbMember["nick"] == BsonNull.Value ? null : dbMember["nick"]) != member.Nickname)
+                                if (dbMember.GlobalName != member.GlobalName)
                                 {
-                                    dbMember["nick"] = member.Nickname != null ? member.Nickname : BsonNull.Value;
-                                    hasChanged = true;
+                                    dbMember.GlobalName = member.GlobalName;
+                                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                                    {
+                                        MemberId = member.Id,
+                                        ColumnName = "global_name",
+                                        PreviousValue = dbMember.GlobalName,
+                                        NewValue = member.GlobalName,
+                                        UpdateTimestamp = DateTime.UtcNow
+                                    });
+                                    memberCount++;
                                 }
 
-                                var newRoles = new BsonArray(member.Roles.Select(role => role.Id.ToString()));
-                                if (!newRoles.SequenceEqual(dbMember["roles"].AsBsonArray))
+                                var beforeRoles = dbMember.Roles.Select(r => r);
+                                var afterRoles = member.Roles.Select(role => (decimal)role.Id).ToHashSet();
+                                var addedRoles = afterRoles.Except(beforeRoles).ToList();
+                                var removedRoles = beforeRoles.Except(afterRoles).ToList();
+                                if (addedRoles.Any() || removedRoles.Any())
                                 {
-                                    dbMember["roles"] = newRoles;
-                                    hasChanged = true;
-                                }
-
-                                // If any value has changed, update the member in the database
-                                if (hasChanged)
-                                {
-                                    await mongo.UpdateMember(dbMember);
+                                    dbMember.Roles = afterRoles.Select(x => Convert.ToDecimal(x)).ToList();
+                                    await db.MemberUpdates.AddAsync(new MemberUpdate
+                                    {
+                                        MemberId = member.Id,
+                                        ColumnName = "roles",
+                                        PreviousValue = string.Join(", ", beforeRoles),
+                                        NewValue = string.Join(", ", afterRoles),
+                                        UpdateTimestamp = DateTime.UtcNow
+                                    });
                                     memberCount++;
                                 }
                             }
                         }
                         catch (Exception e)
                         {
-                            Log.Error(e, "[{Source}]",  "Database Sync");
+                            Log.Error(e, "[{Source}]", "Database Sync");
                         }
+
+                    await db.SaveChangesAsync();
 
                     timer.Stop();
                     response += $"**{timer.Elapsed.TotalSeconds}**\nMembers added/updated to Database: {memberCount}\n";
 
                     // Log the response
-                    if(memberCount > 0 || messageCount > 0)
+                    if (memberCount > 0 || messageCount > 0)
                         Log.Information("[{Source}] {Message}", "Database Sync", response);
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "[{Source}]",  "Database Sync");
+                    Log.Error(e, "[{Source}]", "Database Sync");
                 }
 
                 // Wait 30 minutes

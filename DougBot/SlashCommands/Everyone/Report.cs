@@ -1,12 +1,15 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using DougBot.Shared;
+using DougBot.Shared.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace DougBot.Discord.SlashCommands.Everyone;
 
-public class ReportCmd : InteractionModuleBase
+public class ReportCmd(DougBotContext context) : InteractionModuleBase
 {
+    private readonly DougBotContext _context = context;
+
     [MessageCommand("Report Message")]
     [EnabledInDm(false)]
     public async Task ReportMessage(IMessage message)
@@ -88,8 +91,8 @@ public class ReportCmd : InteractionModuleBase
                     .WithColor(Color.Red)
                     .WithCurrentTimestamp());
             // Get the channels to send the receipt to
-            var settings = await new Mongo().GetBotSettings();
-            var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings["mod_channel_id"]));
+            var settings = await _context.Botsettings.FirstOrDefaultAsync();
+            var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings.ModChannelId));
             await modChannel.SendMessageAsync(embeds: embeds.Select(e => e.Build()).ToArray());
             await ModifyOriginalResponseAsync(m => m.Content = "Your report has been sent to the mods.");
         }

@@ -2,8 +2,9 @@
 using Discord;
 using Discord.WebSocket;
 using DougBot.Discord.Notifications;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace DougBot.Discord.Modules;
 
@@ -39,6 +40,9 @@ public class AutoModMessageReceived : INotificationHandler<MessageReceivedNotifi
             foreach (var attachment in message.Attachments)
                 if (regex.IsMatch(attachment.Filename))
                 {
+                    // declare database context
+                    await using var db = new DougBotContext();
+                    // Send a message to the user
                     await message.Channel.SendMessageAsync(
                         "Please do not upload zip files or executables, the mod team has no way to verify these are not malicious without investing significant time to investigate each upload.");
                     await message.DeleteAsync();
@@ -51,10 +55,10 @@ public class AutoModMessageReceived : INotificationHandler<MessageReceivedNotifi
                         .WithColor(Color.Red)
                         .WithCurrentTimestamp()
                         .Build();
-                    var settings = await new Mongo().GetBotSettings();
+                    var settings = await db.Botsettings.FirstOrDefaultAsync();
                     var guildchannel = (SocketGuild)message.Channel;
                     var modChannel =
-                        (IMessageChannel)guildchannel.GetChannel(Convert.ToUInt64(settings["mod_channel_id"]));
+                        (IMessageChannel)guildchannel.GetChannel(Convert.ToUInt64(settings.ModChannelId));
                     await modChannel.SendMessageAsync(embed: embed);
                 }
         }

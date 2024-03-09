@@ -1,11 +1,11 @@
 ﻿using System.Xml;
 using Discord;
 using DougBot.Discord.Notifications;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using Google.Apis.Services;
 using Google.Apis.YouTube.v3;
 using MediatR;
-using MongoDB.Bson;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Discord.Modules;
@@ -21,9 +21,10 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                 try
                 {
                     // Get the settings
-                    var settings = await new Mongo().GetBotSettings();
-                    var apiKey = settings["youtube_api"].AsString;
-                    var youtubeSettings = (BsonArray)settings["youtube_settings"];
+                    await using var db = new DougBotContext();
+                    var settings = await db.Botsettings.FirstOrDefaultAsync();
+                    var apiKey = settings.YoutubeApi;
+                    var youtubeSettings = await db.YoutubeSettings.ToListAsync();
                     var youtubeService = new YouTubeService(new BaseClientService.Initializer
                     {
                         ApiKey = apiKey
@@ -32,12 +33,12 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                     foreach (var channel in youtubeSettings)
                     {
                         // Get the upload playlist ID
-                        var uploadsPlaylistId = channel["upload_playlist_id"].AsString;
+                        var uploadsPlaylistId = channel.UploadPlaylistId;
                         if (uploadsPlaylistId == null)
                         {
                             // Get the channel by ID
                             var channelsListRequest = youtubeService.Channels.List("contentDetails");
-                            channelsListRequest.Id = channel["youtube_id"].AsString;
+                            channelsListRequest.Id = channel.YoutubeId;
                             var channelsListResponse = await channelsListRequest.ExecuteAsync();
                             uploadsPlaylistId = channelsListResponse.Items[0].ContentDetails.RelatedPlaylists.Uploads;
                         }
@@ -49,7 +50,7 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                         var playlistItemsListResponse = await playlistItemsListRequest.ExecuteAsync();
                         var video = playlistItemsListResponse.Items[0];
                         // Get the video ID
-                        var lastVideoId = channel["last_video_id"].AsString;
+                        var lastVideoId = channel.LastVideoId;
                         var videoId = video.Snippet.ResourceId.VideoId;
                         // If the ID is the same, continue
                         if (lastVideoId == videoId) continue;
@@ -59,7 +60,7 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                         var videoListResponse = await videoListRequest.ExecuteAsync();
                         var videoDetails = videoListResponse.Items[0];
                         var channelName = videoDetails.Snippet.ChannelTitle;
-                        var channelUrl = $"https://www.youtube.com/channel/{channel["youtube_id"].AsString}";
+                        var channelUrl = $"https://www.youtube.com/channel/{channel.YoutubeId}";
                         var videoTitle = videoDetails.Snippet.Title;
                         var videoUrl = $"https://www.youtube.com/watch?v={videoId}";
                         var videoThumbnail = videoDetails.Snippet.Thumbnails.Maxres.Url;
@@ -77,25 +78,24 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                             .WithFooter($"Duration: {TimeSpan.FromSeconds(duration).ToString("hh\\:mm\\:ss")}");
                         var postChannel =
                             await notification.Client.GetChannelAsync(
-                                Convert.ToUInt64(channel["post_channel_id"].AsString));
-                        var mention = $"<@&{channel["mention_role_id"].AsString}>";
+                                Convert.ToUInt64(channel.PostChannelId));
+                        var mention = $"<@&{channel.MentionRoleId}>";
                         // If it is a short
                         // Or if it is the VOD channel and the title does not contain "VOD"
-                        if (duration < 120 || (channel["youtube_id"].AsString == "UCzL0SBEypNk4slpzSbxo01g" &&
+                        if (duration < 120 || (channel.YoutubeId == "UCzL0SBEypNk4slpzSbxo01g" &&
                                                !videoTitle.ToLower().Contains("vod")))
                             mention = "<@&812501073289805884>";
                         // Send the message
                         await ((ITextChannel)postChannel).SendMessageAsync(mention, embed: embed.Build());
                         // Update the last video ID
-                        channel["last_video_id"] = videoId;
+                        channel.LastVideoId = videoId;
+                        // Update the settings
+                        await db.SaveChangesAsync();
                     }
-
-                    // Update the settings
-                    await new Mongo().UpdateBotSettings(settings);
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "[{Source}]",  "Youtube_ReadyHandler");
+                    Log.Error(e, "[{Source}]", "Youtube_ReadyHandler");
                 }
 
                 // Sleep 5 minutes

@@ -2,7 +2,8 @@
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using DougBot.Shared;
+using DougBot.Shared.Database;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Handlers;
@@ -49,7 +50,7 @@ public class InteractionHandler
             var result = await _handler.ExecuteCommandAsync(context, _services);
 
             if (!result.IsSuccess)
-                Log.Error("[{Source}] {Message}", "Interaction",result.ErrorReason);
+                Log.Error("[{Source}] {Message}", "Interaction", result.ErrorReason);
             switch (result.Error)
             {
                 case InteractionCommandError.UnmetPrecondition:
@@ -68,7 +69,7 @@ public class InteractionHandler
     {
         if (!result.IsSuccess)
         {
-            Log.Error("[{Source}] {Message}",commandInfo.Name, result.ErrorReason);
+            Log.Error("[{Source}] {Message}", commandInfo.Name, result.ErrorReason);
             switch (result.Error)
             {
                 case InteractionCommandError.UnmetPrecondition:
@@ -116,10 +117,10 @@ public class InteractionHandler
             .WithCurrentTimestamp()
             .WithColor(result.IsSuccess ? Color.Green : Color.Red);
 
-        var settings = await new Mongo().GetBotSettings();
-        var logChannelId = settings["log_channel_id"].AsString;
+        await using var db = new DougBotContext();
+        var settings = await db.Botsettings.FirstOrDefaultAsync();
         var guild = _client.Guilds.FirstOrDefault();
-        var logChannel = guild.GetTextChannel(ulong.Parse(logChannelId));
+        var logChannel = guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId));
         await logChannel.SendMessageAsync(embed: embed.Build());
     }
 }

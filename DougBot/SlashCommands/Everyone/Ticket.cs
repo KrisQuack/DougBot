@@ -137,7 +137,7 @@ public class Ticket : InteractionModuleBase
         {
             // Respond to the user
             await RespondAsync("An error occurred");
-            Log.Error(e, "[{Source}]",  "Close Ticket");
+            Log.Error(e, "[{Source}]", "Close Ticket");
         }
     }
 }

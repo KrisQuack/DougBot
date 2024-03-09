@@ -1,11 +1,14 @@
 ﻿using Discord;
 using Discord.Interactions;
-using DougBot.Shared;
+using DougBot.Shared.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace DougBot.Discord.SlashCommands.Mod;
 
-public class Lockdown : InteractionModuleBase
+public class Lockdown(DougBotContext context) : InteractionModuleBase
 {
+    private readonly DougBotContext _context = context;
+
     [SlashCommand("lockdown", "Resrict a channel to stricter automod rules")]
     [EnabledInDm(false)]
     [RequireUserPermission(GuildPermission.ModerateMembers)]
@@ -22,8 +25,8 @@ public class Lockdown : InteractionModuleBase
         // Defer the response as this command will take a while
         await DeferAsync(true);
         // Get the mod channel
-        var settings = await new Mongo().GetBotSettings();
-        var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings["mod_channel_id"]));
+        var settings = await _context.Botsettings.FirstOrDefaultAsync();
+        var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings.ModChannelId));
         // Check if a message is already pinned with the channel id
         var pinnedMessages = await Context.Channel.GetPinnedMessagesAsync();
         var pinnedMessage = pinnedMessages

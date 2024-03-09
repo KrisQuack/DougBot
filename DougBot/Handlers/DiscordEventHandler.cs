@@ -3,7 +3,6 @@ using Discord.WebSocket;
 using DougBot.Discord.Notifications;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Serilog;
 
 namespace DougBot.Handlers;
 
@@ -52,6 +51,7 @@ public class DiscordEventHandler
             _firstReady = false;
             return Mediator.Publish(new ReadyNotification(_client), _cancellationToken);
         }
+
         return Task.CompletedTask;
     }
 

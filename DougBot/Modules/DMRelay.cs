@@ -1,8 +1,9 @@
 ﻿using Discord;
 using Discord.Interactions;
 using DougBot.Discord.Notifications;
-using DougBot.Shared;
+using DougBot.Shared.Database;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Discord.Modules;
@@ -50,9 +51,10 @@ public class DmRelayMessageReceived : INotificationHandler<MessageReceivedNotifi
                     .WithButton(viewHistoryButton)
                     .Build();
                 // Send the embed to the mod channel
-                var settings = await new Mongo().GetBotSettings();
+                await using var db = new DougBotContext();
+                var settings = await db.Botsettings.FirstOrDefaultAsync();
                 var guild = notification.Client.Guilds.FirstOrDefault();
-                var modChannel = (IMessageChannel)guild.GetChannel(Convert.ToUInt64(settings["dm_receipt_channel_id"]));
+                var modChannel = (IMessageChannel)guild.GetChannel(Convert.ToUInt64(settings.DmReceiptChannelId));
                 await modChannel.SendMessageAsync(embeds: embeds.ToArray(), components: components);
             }
         });
@@ -94,7 +96,7 @@ public class DmHistory : InteractionModuleBase
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[{Source}]",  "DMHistory");
+            Log.Error(ex, "[{Source}]", "DMHistory");
         }
     }
 }

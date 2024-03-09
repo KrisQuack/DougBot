@@ -80,7 +80,7 @@ public class VerificationChecksReadyHandler : INotificationHandler<ReadyNotifica
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "[{Source}]",  "VerificationChecks_ReadyHandler");
+                    Log.Error(e, "[{Source}]", "VerificationChecks_ReadyHandler");
                 }
 
                 // Delay 10 minutes

@@ -1,13 +1,16 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using DougBot.Shared;
+using DougBot.Shared.Database;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace DougBot.Discord.SlashCommands.Owner;
 
-public class Verification : InteractionModuleBase
+public class Verification(DougBotContext context) : InteractionModuleBase
 {
+    private readonly DougBotContext _context = context;
+
     [SlashCommand("verificationsetup", "Owner command to setup Verification")]
     [EnabledInDm(false)]
     [RequireOwner]
@@ -54,7 +57,7 @@ public class Verification : InteractionModuleBase
             // Get the number of bell peppers
             var peppers = jpeg.Split("_")[2].Split(".")[0];
             // Store the number of bell peppers in the user's data
-            var user = await new Mongo().GetMember(Context.User.Id);
+            var user = await _context.Members.FirstOrDefaultAsync(x => x.Id == Context.User.Id);
             if (user == null)
             {
                 await RespondAsync(
@@ -63,8 +66,8 @@ public class Verification : InteractionModuleBase
                 return;
             }
 
-            user["verification"] = peppers;
-            await new Mongo().UpdateMember(user);
+            user.Verification = Convert.ToInt32(peppers);
+            await _context.SaveChangesAsync();
             // Generate buttons 1-10
             var buttons = new List<ButtonBuilder>();
             for (var i = 1; i <= 10; i++)
@@ -79,7 +82,7 @@ public class Verification : InteractionModuleBase
         }
         catch (Exception e)
         {
-            Log.Error(e, "[{Source}]",  "Verification.verify");
+            Log.Error(e, "[{Source}]", "Verification.verify");
         }
     }
 
@@ -90,9 +93,9 @@ public class Verification : InteractionModuleBase
         // Get the number from the custom id
         var number = int.Parse(option);
         // Get the user's data
-        var user = await new Mongo().GetMember(Context.User.Id);
+        var user = await _context.Members.FirstOrDefaultAsync(x => x.Id == Context.User.Id);
         // If the number is correct
-        if (user["verification"].AsString == number.ToString())
+        if (user.Verification == number)
         {
             // Add the role
             var guild = Context.Guild;

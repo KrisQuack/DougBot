@@ -1,16 +1,20 @@
 ﻿using Discord;
 using Discord.Interactions;
-using DougBot.Shared;
+using DougBot.Shared.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace DougBot.Discord.SlashCommands.Mod;
 
-public class SendDm : InteractionModuleBase
+public class SendDm(DougBotContext context) : InteractionModuleBase
 {
+    private readonly DougBotContext _context = context;
+
     [SlashCommand("send_dm", "Send a DM to a user")]
     [EnabledInDm(false)]
     [RequireUserPermission(GuildPermission.ModerateMembers)]
     public async Task Task([Summary(description: "The user to send the DM to")] IGuildUser user,
-        [Summary(description: "The message to send to the user")] string message)
+        [Summary(description: "The message to send to the user")]
+        string message)
     {
         // Create the embed for the user
         var userEmbed = new EmbedBuilder()
@@ -33,8 +37,8 @@ public class SendDm : InteractionModuleBase
             .Build();
 
         // Get the channels to send the receipt to
-        var settings = await new Mongo().GetBotSettings();
-        var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings["dm_receipt_channel_id"]));
+        var settings = await _context.Botsettings.FirstOrDefaultAsync();
+        var modChannel = await Context.Guild.GetTextChannelAsync(Convert.ToUInt64(settings.DmReceiptChannelId));
         await modChannel.SendMessageAsync(embed: modEmbed);
 
         await RespondAsync("DM sent!", ephemeral: true);

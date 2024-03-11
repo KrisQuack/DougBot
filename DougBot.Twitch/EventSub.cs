@@ -22,7 +22,7 @@ internal class EventSub
     private User _botUser;
     private DiscordSocketClient _client;
     private User _dougUser;
-    private DateTime _lastKeepalive = DateTime.UtcNow;
+    private DateTime _lastMessage = DateTime.UtcNow;
     private Botsetting _settings;
 
     private TwitchAPI _twitchApi;
@@ -100,13 +100,13 @@ internal class EventSub
             var lastStatus = DateTime.UtcNow.AddMinutes(-10);
             while (_websocketClient.State == WebSocketState.Open)
             {
-                // Check if the keepalive is older than 1 minutes
-                if (_lastKeepalive.AddMinutes(1) < DateTime.UtcNow)
+                // Check if the keepalive is older than 1 minute
+                if (_lastMessage.AddMinutes(1) < DateTime.UtcNow)
                 {
                     await _websocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Keepalive",
                         CancellationToken.None);
                     Log.Warning("[{Source}] {Message}", "EventSub",
-                        $"Websocket closed due to keepalive timeout: {_lastKeepalive:hh:mm:ss}");
+                        $"Websocket closed due to keepalive timeout: {_lastMessage:hh:mm:ss}");
                     break;
                 }
 
@@ -133,7 +133,7 @@ internal class EventSub
 
             Log.Warning("[{Source}] {Message}", "EventSub", $"EventSub reconnecting: {_websocketClient.State}");
             _websocketSessionId = null;
-            _lastKeepalive = DateTime.UtcNow;
+            _lastMessage = DateTime.UtcNow;
             // Wait 10 seconds before reconnecting
             await Task.Delay(10000);
         }
@@ -148,7 +148,7 @@ internal class EventSub
     {
         _ = Task.Run(async () =>
         {
-            var buffer = new byte[8192];
+            var buffer = new byte[16384];
             while (true)
                 try
                 {
@@ -201,12 +201,13 @@ internal class EventSub
             else if (json.RootElement.GetProperty("metadata").GetProperty("message_type").GetString() ==
                      "session_keepalive")
             {
-                _lastKeepalive = DateTime.UtcNow;
+                _lastMessage = DateTime.UtcNow;
             }
             // If there is the subscription type, get it
             else if (json.RootElement.GetProperty("metadata")
                      .TryGetProperty("subscription_type", out var subscriptionType))
             {
+                _lastMessage = DateTime.UtcNow;
                 switch (subscriptionType.GetString())
                 {
                     case "channel.update":
@@ -312,7 +313,7 @@ internal class EventSub
             // Create a new event
             var banner = new Image("Data/LiveBanner.png");
             var streamEvent = await _client.Guilds.FirstOrDefault().CreateEventAsync(stream.Title,
-                DateTimeOffset.UtcNow, GuildScheduledEventType.External, GuildScheduledEventPrivacyLevel.Private,
+                DateTimeOffset.UtcNow.AddMinutes(10), GuildScheduledEventType.External, GuildScheduledEventPrivacyLevel.Private,
                 stream.GameName, DateTime.UtcNow.AddDays(1), location: "https://twitch.tv/dougdoug",
                 coverImage: banner);
             // Start the event

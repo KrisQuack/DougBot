@@ -131,6 +131,8 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
                 // Check each value, if it is changed add to embed and update database
                 if (dbUser.Nickname != after.Nickname)
                 {
+                    embed.AddField("Old Nickname", string.IsNullOrEmpty(dbUser.Nickname) ? "None" : dbUser.Nickname);
+                    embed.AddField("New Nickname", string.IsNullOrEmpty(after.Nickname) ? "None" : after.Nickname);
                     await db.MemberUpdates.AddAsync(new MemberUpdate
                     {
                         MemberId = after.Id,
@@ -144,6 +146,8 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
 
                 if (dbUser.Username != after.Username)
                 {
+                    embed.AddField("Old Username", string.IsNullOrEmpty(dbUser.Username) ? "None" : dbUser.Username);
+                    embed.AddField("New Username", string.IsNullOrEmpty(after.Username) ? "None" : after.Username);
                     dbUser.Username = after.Username;
                     await db.MemberUpdates.AddAsync(new MemberUpdate
                     {
@@ -157,6 +161,8 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
 
                 if (dbUser.GlobalName != after.GlobalName)
                 {
+                    embed.AddField("Old Global Name", string.IsNullOrEmpty(dbUser.GlobalName) ? "None" : dbUser.GlobalName);
+                    embed.AddField("New Global Name", string.IsNullOrEmpty(after.GlobalName) ? "None" : after.GlobalName);
                     dbUser.GlobalName = after.GlobalName;
                     await db.MemberUpdates.AddAsync(new MemberUpdate
                     {
@@ -170,6 +176,8 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
 
                 if (addedRoles.Any() || removedRoles.Any())
                 {
+                    embed.AddField("Added Roles", addedRoles.Any() ? string.Join(" ", addedRoles.Select(r => $"<@&{r}>")) : "None");
+                    embed.AddField("Removed Roles", removedRoles.Any() ? string.Join(" ", removedRoles.Select(r => $"<@&{r}>")) : "None");
                     dbUser.Roles = afterRoles.Select(x => Convert.ToDecimal(x)).ToList();
                     await db.MemberUpdates.AddAsync(new MemberUpdate
                     {
@@ -186,7 +194,7 @@ public class AuditLogGuildMemberUpdated : INotificationHandler<GuildMemberUpdate
                 {
                     var settings = await db.Botsettings.FirstOrDefaultAsync();
                     await notification.NewUser.Guild.GetTextChannel(Convert.ToUInt64(settings.LogChannelId))
-                        .SendMessageAsync(embed: embed.Build());
+                        .SendMessageAsync(embed: embed.Build(), allowedMentions: AllowedMentions.None);
                 }
 
                 await db.SaveChangesAsync();

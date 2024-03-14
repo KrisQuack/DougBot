@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
 
 namespace DougBot.Shared.Database;
 
@@ -23,10 +25,12 @@ public partial class DougBotContext : DbContext
 
     public virtual DbSet<MessageUpdate> MessageUpdates { get; set; }
 
+    public virtual DbSet<Serilog> Serilogs { get; set; }
+
     public virtual DbSet<YoutubeSetting> YoutubeSettings { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https: //go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseNpgsql(Environment.GetEnvironmentVariable("CONNECTION_STRING"));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -171,6 +175,23 @@ public partial class DougBotContext : DbContext
             entity.HasOne(d => d.Message).WithMany(p => p.MessageUpdates)
                 .HasForeignKey(d => d.MessageId)
                 .HasConstraintName("message_update_message_id_fkey");
+        });
+
+        modelBuilder.Entity<Serilog>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("serilog");
+
+            entity.Property(e => e.Exception).HasColumnName("exception");
+            entity.Property(e => e.Level).HasColumnName("level");
+            entity.Property(e => e.MachineName).HasColumnName("machine_name");
+            entity.Property(e => e.Message).HasColumnName("message");
+            entity.Property(e => e.MessageTemplate).HasColumnName("message_template");
+            entity.Property(e => e.Properties)
+                .HasColumnType("jsonb")
+                .HasColumnName("properties");
+            entity.Property(e => e.RaiseDate).HasColumnName("raise_date");
         });
 
         modelBuilder.Entity<YoutubeSetting>(entity =>

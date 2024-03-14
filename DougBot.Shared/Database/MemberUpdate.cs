@@ -1,6 +1,9 @@
-﻿namespace DougBot.Shared.Database;
+﻿using System;
+using System.Collections.Generic;
 
-public class MemberUpdate
+namespace DougBot.Shared.Database;
+
+public partial class MemberUpdate
 {
     public int Id { get; set; }
 

@@ -85,8 +85,13 @@ public class YoutubeReadyHandler : INotificationHandler<ReadyNotification>
                         if (duration < 120 || (channel.YoutubeId == "UCzL0SBEypNk4slpzSbxo01g" &&
                                                !videoTitle.ToLower().Contains("vod")))
                             mention = "<@&812501073289805884>";
-                        // Send the message
-                        await ((ITextChannel)postChannel).SendMessageAsync(mention, embed: embed.Build());
+                        
+                        // Check if the video is older than 6hr
+                        if (DateTime.UtcNow.AddHours(-6) < videoDetails.Snippet.PublishedAtDateTimeOffset.Value.UtcDateTime)
+                        {
+                            // Send the message
+                            await ((ITextChannel)postChannel).SendMessageAsync(mention, embed: embed.Build());
+                        }
                         // Update the last video ID
                         channel.LastVideoId = videoId;
                         // Update the settings

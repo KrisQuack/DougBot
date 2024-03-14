@@ -1,6 +1,9 @@
-﻿namespace DougBot.Shared.Database;
+﻿using System;
+using System.Collections.Generic;
 
-public class YoutubeSetting
+namespace DougBot.Shared.Database;
+
+public partial class YoutubeSetting
 {
     public int SettingId { get; set; }
 

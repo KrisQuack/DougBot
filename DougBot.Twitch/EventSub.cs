@@ -110,8 +110,8 @@ internal class EventSub
                     break;
                 }
 
-                // If the last status is older than 15 minutes, print the status
-                if (lastStatus.AddMinutes(15) < DateTime.UtcNow)
+                // If the last status is older than 30 minutes, print the status
+                if (lastStatus.AddMinutes(30) < DateTime.UtcNow)
                 {
                     subscriptions = await _twitchApi.Helix.EventSub.GetEventSubSubscriptionsAsync();
                     // Check if any are not "enabled"

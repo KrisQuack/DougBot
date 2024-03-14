@@ -46,6 +46,8 @@ public class DiscordEventHandler
 
     private Task OnReadyAsync()
     {
+        // Set status message
+        _ = _client.SetGameAsync("DM me for Mods", type: ActivityType.Watching);
         if (_firstReady)
         {
             _firstReady = false;

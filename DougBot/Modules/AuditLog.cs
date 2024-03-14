@@ -329,8 +329,11 @@ public class AuditLogMessageUpdated : INotificationHandler<MessageUpdatedNotific
                 if (dbMessage.Content != after.Content)
                     if (!string.IsNullOrEmpty(dbMessage.Content) && !string.IsNullOrEmpty(after.Content))
                     {
-                        embed.AddField("Content", dbMessage.Content);
-                        embed.AddField("Updated Content", after.Content);
+                        var content = dbMessage.Content.Length > 1024 ? dbMessage.Content.Substring(0, 1024) : dbMessage.Content;
+                        var updatedContent = after.Content.Length > 1024 ? after.Content.Substring(0, 1024) : after.Content;
+
+                        embed.AddField("Content", content);
+                        embed.AddField("Updated Content", updatedContent);
 
                         await db.MessageUpdates.AddAsync(new MessageUpdate
                         {
@@ -379,39 +382,48 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     // declare database context
                     await using var db = new DougBotContext();
                     var response = "";
-                    var timer = new Stopwatch();
-                    timer.Start();
+                    var timer = Stopwatch.StartNew();
                     //Get values
-                    var cutoff = DateTime.UtcNow.AddHours(-1);
+                    var cutoff = DateTime.UtcNow.AddDays(1);
                     var guild = notification.Client.Guilds.FirstOrDefault();
-                    var channels = guild.TextChannels.ToList();
+                    var channels = new List<ITextChannel>();
+                    channels.AddRange(guild.Channels.OfType<ITextChannel>());
                     response +=
-                        $"**{timer.Elapsed.TotalSeconds}**\nMembers: {guild.Users.Count}\nChannels: {channels.Count}\n";
-                    // Remove inactive channels
-                    var activeChannels = new List<SocketTextChannel>();
-                    foreach (var channel in channels)
-                    {
-                        //Get most recent message
-                        var recentMessage = await channel.GetMessagesAsync(1).FirstOrDefaultAsync();
-                        // If this is not within the cutoff, remove it
-                        if (recentMessage.Any() && recentMessage.FirstOrDefault().CreatedAt > cutoff)
-                            activeChannels.Add(channel);
-                    }
-
-                    response += $"**{timer.Elapsed.TotalSeconds}**\nActive Channels: {activeChannels.Count}\n";
+                        $"**{timer.Elapsed.TotalSeconds}**Channels: {channels.Count}\n";
+                    
                     // For each channel, get the last 1000 messages
                     var messageCount = 0;
-                    foreach (var channel in activeChannels)
+                    foreach (var channel in channels)
                     {
-                        var messages = await channel.GetMessagesAsync(1000).FlattenAsync();
-                        messages = messages.Where(x => !x.Author.IsBot && x.CreatedAt > cutoff);
-                        var dbMessages = await db.Messages.Where(m => m.ChannelId == channel.Id && m.CreatedAt > cutoff)
-                            .ToListAsync();
-                        messages = messages.Where(x => !dbMessages.Any(y => y.Id == x.Id));
+                        var messages = (await channel.GetMessagesAsync(1000).FlattenAsync())
+                            .Where(x => !x.Author.IsBot && !x.Author.IsWebhook && x.CreatedAt.UtcDateTime > cutoff);
+                        var dbMessages = await db.Messages
+                            .Where(m => m.ChannelId == channel.Id && m.CreatedAt > cutoff)
+                            .ToDictionaryAsync(m => m.Id, m => m);
+
                         foreach (var message in messages)
+                        {
                             try
                             {
-                                if (!message.Author.IsBot)
+                                // If the message is in the database, check if it is different
+                                if (dbMessages.TryGetValue(message.Id, out var dbMessage))
+                                {
+                                    if (dbMessage.Content != message.Content)
+                                    {
+                                        dbMessage.Content = message.Content;
+                                        await db.MessageUpdates.AddAsync(new MessageUpdate
+                                        {
+                                            MessageId = message.Id,
+                                            ColumnName = "content",
+                                            PreviousValue = dbMessage.Content,
+                                            NewValue = message.Content,
+                                            UpdateTimestamp = DateTime.UtcNow
+                                        });
+                                        messageCount++;
+                                    }
+                                }
+                                // If the message is not in the database, add it
+                                else
                                 {
                                     await db.Messages.AddAsync(new Message
                                     {
@@ -429,105 +441,78 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                             {
                                 Log.Error(e, "[{Source}]", "Database Sync");
                             }
+                        }
                     }
 
                     await db.SaveChangesAsync();
 
-                    response += $"**{timer.Elapsed.TotalSeconds}**\nMessages added to Database: {messageCount}\n";
+                    response += $"**{timer.Elapsed.TotalSeconds}**\nMessages added/updated to Database: {messageCount}\n";
 
                     // For each member, check if they are in the database, if not add them
+                    var members = await guild.GetUsersAsync().FlattenAsync();
+                    Log.Information("[{Source}] {Message}", "Database Sync", $"Members: {members.Count()}");
                     var memberCount = 0;
-                    var dbMembers = await db.Members.ToListAsync();
-                    foreach (var member in guild.Users)
+                    var dbMembers = await db.Members.ToDictionaryAsync(m => m.Id, m => m);
+                    foreach (var member in members)
+                    {
                         try
                         {
-                            var dbMember = dbMembers.FirstOrDefault(x => x.Id == member.Id);
-                            if (dbMember == null)
+                            // If the member is in the database, check if it is different
+                            if (dbMembers.TryGetValue(member.Id, out var dbMember))
                             {
-                                var rolesList = member.Roles.Select(role => role.Id).ToList();
-                                var roleDecimals = rolesList.ConvertAll(x => (decimal)x);
+                                var rolesList = member.RoleIds.Select(role => (decimal)role).ToList();
+                                if (dbMember.Nickname != member.Nickname || dbMember.Username != member.Username || dbMember.GlobalName != member.GlobalName || !dbMember.Roles.SequenceEqual(rolesList))
+                                {
+                                    var propertiesToUpdate = new List<(string PropertyName, string OldValue, string NewValue)>
+                                    {
+                                        ("nickname", dbMember.Nickname, member.Nickname),
+                                        ("username", dbMember.Username, member.Username),
+                                        ("globalname", dbMember.GlobalName, member.GlobalName),
+                                        ("roles", string.Join(", ", dbMember.Roles), string.Join(", ", rolesList))
+                                    };
+
+                                    foreach (var property in propertiesToUpdate.Where(property => property.OldValue != property.NewValue))
+                                    {
+                                        await db.MemberUpdates.AddAsync(new MemberUpdate
+                                        {
+                                            MemberId = member.Id,
+                                            ColumnName = property.PropertyName,
+                                            PreviousValue = property.OldValue,
+                                            NewValue = property.NewValue,
+                                            UpdateTimestamp = DateTime.UtcNow
+                                        });
+                                        memberCount++;
+                                    }
+
+                                    dbMember.Nickname = member.Nickname;
+                                    dbMember.Username = member.Username;
+                                    dbMember.GlobalName = member.GlobalName;
+                                    dbMember.Roles = rolesList;
+                                }
+                            }
+                            // If the member is not in the database, add them
+                            else
+                            {
+                                var rolesList = member.RoleIds.Select(role => (decimal)role).ToList();
                                 await db.Members.AddAsync(new Member
                                 {
                                     Id = member.Id,
                                     Username = member.Username,
                                     GlobalName = member.GlobalName,
                                     Nickname = member.Nickname,
-                                    Roles = roleDecimals,
-                                    JoinedAt = member.JoinedAt.HasValue
-                                        ? member.JoinedAt.Value.UtcDateTime
-                                        : DateTime.UtcNow,
+                                    Roles = rolesList,
+                                    JoinedAt = member.JoinedAt.HasValue ? member.JoinedAt.Value.UtcDateTime : DateTime.UtcNow,
                                     CreatedAt = member.CreatedAt.UtcDateTime
                                 });
                                 memberCount++;
-                            }
-                            else
-                            {
-                                // Check if any value has changed
-                                if (dbMember.Nickname != member.Nickname)
-                                {
-                                    dbMember.Nickname = member.Nickname;
-                                    await db.MemberUpdates.AddAsync(new MemberUpdate
-                                    {
-                                        MemberId = member.Id,
-                                        ColumnName = "nickname",
-                                        PreviousValue = dbMember.Nickname,
-                                        NewValue = member.Nickname,
-                                        UpdateTimestamp = DateTime.UtcNow
-                                    });
-                                    memberCount++;
-                                }
-
-                                if (dbMember.Username != member.Username)
-                                {
-                                    dbMember.Username = member.Username;
-                                    await db.MemberUpdates.AddAsync(new MemberUpdate
-                                    {
-                                        MemberId = member.Id,
-                                        ColumnName = "username",
-                                        PreviousValue = dbMember.Username,
-                                        NewValue = member.Username,
-                                        UpdateTimestamp = DateTime.UtcNow
-                                    });
-                                    memberCount++;
-                                }
-
-                                if (dbMember.GlobalName != member.GlobalName)
-                                {
-                                    dbMember.GlobalName = member.GlobalName;
-                                    await db.MemberUpdates.AddAsync(new MemberUpdate
-                                    {
-                                        MemberId = member.Id,
-                                        ColumnName = "global_name",
-                                        PreviousValue = dbMember.GlobalName,
-                                        NewValue = member.GlobalName,
-                                        UpdateTimestamp = DateTime.UtcNow
-                                    });
-                                    memberCount++;
-                                }
-
-                                var beforeRoles = dbMember.Roles.Select(r => r);
-                                var afterRoles = member.Roles.Select(role => (decimal)role.Id).ToHashSet();
-                                var addedRoles = afterRoles.Except(beforeRoles).ToList();
-                                var removedRoles = beforeRoles.Except(afterRoles).ToList();
-                                if (addedRoles.Any() || removedRoles.Any())
-                                {
-                                    dbMember.Roles = afterRoles.Select(x => Convert.ToDecimal(x)).ToList();
-                                    await db.MemberUpdates.AddAsync(new MemberUpdate
-                                    {
-                                        MemberId = member.Id,
-                                        ColumnName = "roles",
-                                        PreviousValue = string.Join(", ", beforeRoles),
-                                        NewValue = string.Join(", ", afterRoles),
-                                        UpdateTimestamp = DateTime.UtcNow
-                                    });
-                                    memberCount++;
-                                }
                             }
                         }
                         catch (Exception e)
                         {
                             Log.Error(e, "[{Source}]", "Database Sync");
                         }
+                        
+                    }
 
                     await db.SaveChangesAsync();
 
@@ -543,8 +528,8 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     Log.Error(e, "[{Source}]", "Database Sync");
                 }
 
-                // Wait 30 minutes
-                await Task.Delay(1800000);
+                // Wait
+                await Task.Delay(TimeSpan.FromHours(1));
             }
         });
     }

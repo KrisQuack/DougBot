@@ -1,6 +1,9 @@
-﻿namespace DougBot.Shared.Database;
+﻿using System;
+using System.Collections.Generic;
 
-public class Message
+namespace DougBot.Shared.Database;
+
+public partial class Message
 {
     public decimal Id { get; set; }
 

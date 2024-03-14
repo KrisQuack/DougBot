@@ -5,9 +5,12 @@ using DougBot.Handlers;
 using DougBot.Shared.Database;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using NpgsqlTypes;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
+using Serilog.Sinks.PostgreSQL;
+using Serilog.Sinks.PostgreSQL.ColumnWriters;
 
 namespace DougBot.Discord;
 
@@ -61,12 +64,22 @@ public class DiscordBot
     private async Task RunAsync()
     {
         await using var services = ConfigureServices();
-
+        
+        IDictionary<string, ColumnWriterBase> columnWriters = new Dictionary<string, ColumnWriterBase>
+        {
+            { "message", new RenderedMessageColumnWriter(NpgsqlDbType.Text) },
+            { "message_template", new MessageTemplateColumnWriter(NpgsqlDbType.Text) },
+            { "level", new LevelColumnWriter(true, NpgsqlDbType.Varchar) },
+            { "raise_date", new TimestampColumnWriter(NpgsqlDbType.TimestampTz) },
+            { "exception", new ExceptionColumnWriter(NpgsqlDbType.Text) },
+            { "properties", new PropertiesColumnWriter(NpgsqlDbType.Jsonb) },
+            { "machine_name", new SinglePropertyColumnWriter("MachineName", PropertyWriteMethod.ToString, NpgsqlDbType.Text, "l") }
+        };
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .Enrich.FromLogContext()
             .WriteTo.Console()
-            .WriteTo.Sink(new DelegateSink(services.GetRequiredService<IMediator>()))
+            .WriteTo.PostgreSQL(Environment.GetEnvironmentVariable("CONNECTION_STRING"), "serilog", columnWriters, needAutoCreateTable: true)
             .CreateLogger();
 
         _client = services.GetRequiredService<DiscordSocketClient>();
@@ -95,20 +108,5 @@ public class DiscordBot
             ? logEventLevel
             : LogEventLevel.Information;
         Log.Write(severity, message.Exception, "[{Source}] {Message}", message.Source, message.Message);
-    }
-}
-
-public class DelegateSink : ILogEventSink
-{
-    private readonly IMediator _mediator;
-
-    public DelegateSink(IMediator mediator)
-    {
-        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-    }
-
-    public void Emit(LogEvent logEvent)
-    {
-        _mediator.Publish(new LoggingNotification(logEvent));
     }
 }

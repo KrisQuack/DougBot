@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
+using DougBot.Shared.OpenAI;
 using Serilog;
 
 namespace DougBot.Discord.SlashCommands.Everyone;
@@ -8,6 +9,8 @@ namespace DougBot.Discord.SlashCommands.Everyone;
 [EnabledInDm(false)]
 public class Ticket : InteractionModuleBase
 {
+    private const ulong statusChannelId = 715024092914516011;
+    
     [SlashCommand("open", "Open a new ticket")]
     public async Task CreateTicket()
     {
@@ -35,21 +38,23 @@ public class Ticket : InteractionModuleBase
                 "Thanks for opening a ticket, one of the team will be with you as soon as possible, we are however a small team spanning many timezones so please be patient. Thank you for understanding.")
             .WithCurrentTimestamp()
             .Build();
-        await ticket.SendMessageAsync(Context.User.Mention, embed: embed);
+        var openMessage = await ticket.SendMessageAsync(Context.User.Mention, embed: embed);
         // Send the ticket description
         await ticket.SendMessageAsync($".\n{user.DisplayName}: {modal.Description}");
         await ticket.SendMessageAsync("<@&750458206773444668>");
         // Respond to the user
         await FollowupAsync("Ticket created successfully", ephemeral: true);
         // Send a message to the staff channel with a button to join the ticket
-        var staffChannel = await Context.Guild.GetTextChannelAsync(755155718214123600);
+        var staffChannel = await Context.Guild.GetTextChannelAsync(statusChannelId);
         var button = new ComponentBuilder().WithButton("Join Ticket", $"join_ticket:{ticket.Id}").Build();
         var staffEmbed = new EmbedBuilder()
-            .WithTitle($"New ticket from {user.DisplayName}")
-            .WithDescription("Click the button below to join the ticket")
-            .WithCurrentTimestamp();
-        staffEmbed.AddField("Title", modal.Name);
-        staffEmbed.AddField("Description", modal.Description);
+            .WithTitle($"{user.DisplayName}: {modal.Title}")
+            .WithFooter(footer => footer.Text = ticket.Id.ToString())
+            .WithAuthor($"{Context.User.Username} ({Context.User.Id})", Context.User.GetAvatarUrl())
+            .AddField(new EmbedFieldBuilder { Name = "Reason", Value = modal.Description })
+            .AddField(new EmbedFieldBuilder { Name = "Link", Value = openMessage.GetJumpUrl() })
+            .AddField("Title", modal.Name)
+            .AddField("Description", modal.Description);
         await staffChannel.SendMessageAsync(embed: staffEmbed.Build(), components: button);
     }
 
@@ -126,6 +131,56 @@ public class Ticket : InteractionModuleBase
                 await RespondAsync("Ticket closed", ephemeral: true);
                 // Close the ticket
                 await thread.ModifyAsync(properties => properties.Archived = true);
+                // Find the message in the staff channel and remove the join button
+                var staffChannel = await Context.Guild.GetTextChannelAsync(statusChannelId);
+                var messages = await staffChannel.GetMessagesAsync(100).FlattenAsync();
+                var message = messages.FirstOrDefault(m => m.Author.Id == Context.Client.CurrentUser.Id &&
+                                                           m.Embeds.Any(e => e.Footer?.Text == thread.Id.ToString())) as IUserMessage;
+                if (message != null)
+                {
+                    await message.ModifyAsync(properties => properties.Components = null);
+                    // Generate the summary
+                    try
+                    {
+                        // Get the ticket history
+                        var ticketHistory = await thread.GetMessagesAsync(int.MaxValue).FlattenAsync();
+                        var ticketString = "";
+                        // Loop through the messages and add them to the string
+                        foreach (var msg in ticketHistory)
+                        {
+                            var authorName = msg.Author.Username;
+                            if (msg.Author is IGuildUser guildUser && guildUser.GuildPermissions.ManageMessages)
+                                authorName += " (mod)";
+                            if (msg.Author.IsBot)
+                                authorName += " (bot)";
+                            var content = msg.CleanContent;
+                            foreach (var embed in msg.Embeds)
+                            {
+                                content += $"\n# Embed\nAuthor: {embed.Author?.Name}\nTitle: {embed.Title}\nDescription: {embed.Description}\n";
+                                foreach (var field in embed.Fields)
+                                    content += $"Field: {field.Name}\nValue: {field.Value}\n";
+                            }
+                            ticketString += $"{authorName}: {content}\n";
+                        }
+                        // Get the summary
+                        var ai = new OpenAI();
+                        var summary = await ai.TicketSummary(ticketString);
+                        // Make sure the summary is 1000 characters or less
+                        if (summary.Length > 1000)
+                            summary = summary.Substring(0, 1000) + "...";
+                        // Modify the embed to include the summary
+                        var messageEmbed = message.Embeds.FirstOrDefault().ToEmbedBuilder();
+                        messageEmbed.AddField("Summary", summary);
+                        await message.ModifyAsync(properties => properties.Embed = messageEmbed.Build());
+                        // Send and delete a message to the staff channel to cause a notification
+                        var notification = await staffChannel.SendMessageAsync("Ticket closed", messageReference: new MessageReference(message.Id));
+                        await notification.DeleteAsync();
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error(e, "[{Source}]", "Ticket Summary");
+                    }
+                }
             }
             else
             {

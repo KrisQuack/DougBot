@@ -450,7 +450,7 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
 
                     // For each member, check if they are in the database, if not add them
                     var members = await guild.GetUsersAsync().FlattenAsync();
-                    Log.Information("[{Source}] {Message}", "Database Sync", $"Members: {members.Count()}");
+                    response += $"**{timer.Elapsed.TotalSeconds}**Members: {members.Count()}\n";
                     var memberCount = 0;
                     var dbMembers = await db.Members.ToDictionaryAsync(m => m.Id, m => m);
                     foreach (var member in members)

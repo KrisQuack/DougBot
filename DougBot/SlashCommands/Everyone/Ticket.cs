@@ -144,6 +144,8 @@ public class Ticket : InteractionModuleBase
                     {
                         // Get the ticket history
                         var ticketHistory = await thread.GetMessagesAsync(int.MaxValue).FlattenAsync();
+                        // Order the history so the oldest messages are first to be processed
+                        ticketHistory = ticketHistory.OrderBy(m => m.CreatedAt);
                         var ticketString = "";
                         // Loop through the messages and add them to the string
                         foreach (var msg in ticketHistory)

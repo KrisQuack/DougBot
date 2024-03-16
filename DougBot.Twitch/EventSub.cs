@@ -18,7 +18,7 @@ internal class EventSub
     private const string WebsocketBaseUrl = "wss://eventsub.wss.twitch.tv/ws";
     private const ulong McRoleId = 698681714616303646;
     private const ulong PesosRoleId = 954017881652342786;
-    private const ulong McChannelId = 698679698699583529;
+    private const ulong McChannelId = 778438592887521280;
     private User _botUser;
     private DiscordSocketClient _client;
     private User _dougUser;
@@ -97,7 +97,7 @@ internal class EventSub
                 _websocketSessionId
             );
             // Ensure the health of the websocket
-            var lastStatus = DateTime.UtcNow.AddMinutes(-10);
+            var lastStatus = DateTime.UtcNow.AddHours(-1);
             while (_websocketClient.State == WebSocketState.Open)
             {
                 // Check if the keepalive is older than 1 minute
@@ -149,7 +149,10 @@ internal class EventSub
         _ = Task.Run(async () =>
         {
             var buffer = new byte[16384];
+            var message = new StringBuilder();
+
             while (true)
+            {
                 try
                 {
                     // Check if the websocket is open
@@ -159,40 +162,43 @@ internal class EventSub
                         continue;
                     }
 
-                    var result =
-                        await _websocketClient.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                    _ = ProcessNotification(buffer, result);
+                    var result = await _websocketClient.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+                    message.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+
+                    if (result.EndOfMessage)
+                    {
+                        _ = ProcessNotification(message.ToString());
+                        message.Clear();
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[{Source}]", "ListenToWebsocket");
+                    Log.Error(ex, "[{Source}]", "EventSub ListenToWebsocket");
                 }
+            }
         });
     }
 
-    private async Task ProcessNotification(byte[] buffer, WebSocketReceiveResult result)
+    private async Task ProcessNotification(string jsonMessage)
     {
         try
         {
-            // Check if there is any data to read
-            if (result.Count == 0) return;
-            // Try to parse the json
-            var response = Encoding.UTF8.GetString(buffer, 0, result.Count);
             JsonDocument json;
             try
             {
-                json = JsonDocument.Parse(response);
+                json = JsonDocument.Parse(jsonMessage);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "[{Source}] {Message}", "EventSub", $"Error parsing JSON: {response}");
+                Log.Warning(ex, "[{Source}] {Message}", "EventSub", $"Error parsing JSON: {jsonMessage}");
                 return;
             }
 
             // Handle welcome message
             if (json.RootElement.GetProperty("metadata").GetProperty("message_type").GetString() == "session_welcome")
             {
-                var welcomeMessage = JsonSerializer.Deserialize<WebsocketWelcome.Root>(response);
+                var welcomeMessage = JsonSerializer.Deserialize<WebsocketWelcome.Root>(jsonMessage);
                 _websocketSessionId = welcomeMessage.payload.session.id;
                 Log.Information("[{Source}] {Message}", "EventSub",
                     $"Twitch websocket session id: {_websocketSessionId}");
@@ -211,19 +217,19 @@ internal class EventSub
                 switch (subscriptionType.GetString())
                 {
                     case "channel.update":
-                        var channelUpdate = JsonSerializer.Deserialize<WebsocketChannelUpdate.Root>(response);
+                        var channelUpdate = JsonSerializer.Deserialize<WebsocketChannelUpdate.Root>(jsonMessage);
                         await ChannelUpdateHandler(channelUpdate);
                         break;
                     case "stream.online":
-                        var streamOnline = JsonSerializer.Deserialize<WebsocketStreamOnline.Root>(response);
+                        var streamOnline = JsonSerializer.Deserialize<WebsocketStreamOnline.Root>(jsonMessage);
                         await ChannelSteamOnline(streamOnline);
                         break;
                     case "stream.offline":
-                        var streamOffline = JsonSerializer.Deserialize<WebsocketStreamOffline.Root>(response);
+                        var streamOffline = JsonSerializer.Deserialize<WebsocketStreamOffline.Root>(jsonMessage);
                         await ChannelStreamOffline(streamOffline);
                         break;
                     case "channel.chat.message":
-                        var chatMessage = JsonSerializer.Deserialize<WebsocketChannelChatMessage.Root>(response);
+                        var chatMessage = JsonSerializer.Deserialize<WebsocketChannelChatMessage.Root>(jsonMessage);
                         await ChannelChatMessage(chatMessage);
                         break;
                     default:

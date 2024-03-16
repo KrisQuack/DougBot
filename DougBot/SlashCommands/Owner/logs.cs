@@ -37,7 +37,7 @@ public class Logs(DougBotContext context) : InteractionModuleBase
             else
             {
                 logs = await _context.Serilogs
-                    .Where(l => l.Properties.Contains($"\"Source\": \"{source}\""))
+                    .Where(l => l.Message.Contains(source))
                     .OrderByDescending(l => l.RaiseDate)
                     .Take(take)
                     .ToListAsync();

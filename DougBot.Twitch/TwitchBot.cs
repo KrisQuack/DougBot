@@ -37,6 +37,10 @@ public class TwitchBot
             var eventSub = new EventSub();
             _ = eventSub.ConnectAsync(_client, _twitchApi);
 
+            // Connect to pubsub
+            var pubSub = new PubSub();
+            _ = pubSub.ConnectAsync(_client, _twitchApi);
+            
             while (true)
             {
                 // Get the time untill the refresh token expires
@@ -54,6 +58,7 @@ public class TwitchBot
                 // Update the settings
                 _twitchApi.Settings.AccessToken = refresh.AccessToken;
                 eventSub.UpdateAccessToken(refresh.AccessToken);
+                pubSub.UpdateAccessToken(refresh.AccessToken);
             }
         }
         catch (Exception ex)

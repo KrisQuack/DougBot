@@ -154,6 +154,7 @@ public class Ticket : InteractionModuleBase
                         // Modify the embed to include the summary
                         var messageEmbed = message.Embeds.FirstOrDefault().ToEmbedBuilder();
                         messageEmbed.AddField("Summary", summary);
+                        await message.ModifyAsync(x => x.Embed = messageEmbed.Build());
                         // Send and delete a message to the staff channel to cause a notification
                         var notification = await staffChannel.SendMessageAsync("Ticket closed", messageReference: new MessageReference(message.Id));
                         await notification.DeleteAsync();

@@ -30,10 +30,16 @@ public class WatchdogReadyHandler : INotificationHandler<ReadyNotification>
                         {
                             var errorEmbed = new EmbedBuilder
                             {
-                                Description = $"```{log.Exception}```",
+                                Description = $"{log.Message}\n```{log.Exception}```",
                                 Color = Color.Red
                             };
                             await owner.SendMessageAsync(embed: errorEmbed.Build());
+                        }
+                        
+                        // If there are more than 5 then reboot the bot
+                        if (logs.Count > 5)
+                        {
+                            Environment.Exit(0);
                         }
                     }
                 }

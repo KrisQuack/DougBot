@@ -34,4 +34,33 @@ public class OpenAI
         var responseMessage = response.Value.Choices[0].Message;
         return responseMessage.Content;
     }
+    
+    public async Task<string> SummarizeChat(string chatString)
+    {
+        var chatCompletionsOptions = new ChatCompletionsOptions()
+        {
+            DeploymentName = "gpt-4-8k",
+            Messages =
+            {
+                new ChatRequestSystemMessage("""
+                                             You are a bot who is designed to take in a chat history from a discord channel and provide a summary of what people are discussing.
+                                             Please ensure the summary is brief and bullet pointed by topic.
+                                             Also end with an analysis of the sentiment of the conversation (If it is fine/aggressive/sexual/rude and so on.
+                                             Try to keep a maximum of 1000 characters
+                                             
+                                             Format:
+                                             - **Topic 1:** This is what people are discussing
+                                             - **Topic 2:** This is what people are discussing
+                                             
+                                             **Sentiment:**
+                                             This is the sentiment of the conversation
+                                             """),
+                new ChatRequestUserMessage(chatString),
+            },
+            MaxTokens = 1000,
+        };
+        var response = await _client.GetChatCompletionsAsync(chatCompletionsOptions);
+        var responseMessage = response.Value.Choices[0].Message;
+        return responseMessage.Content;
+    }
 }

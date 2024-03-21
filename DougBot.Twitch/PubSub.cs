@@ -18,6 +18,7 @@ public class PubSub
     private DiscordSocketClient _client;
     private User _dougUser;
     private Botsetting _settings;
+    private ITextChannel? _gambleChannel;
     private IUserMessage? _lastGambleMessage;
     private DateTime _lastGamblePost = DateTime.UtcNow;
 
@@ -31,6 +32,14 @@ public class PubSub
         _twitchApi = twitchApi;
         await using var db = new DougBotContext();
         _settings = await db.Botsettings.FirstOrDefaultAsync();
+        // Get the most recent gamble post if there is one
+        _gambleChannel = _client.GetChannel(Convert.ToUInt64(_settings.TwitchGamblingChannelId)) as ITextChannel;
+        var pins = await _gambleChannel.GetPinnedMessagesAsync();
+        var pin = pins.FirstOrDefault(x => x.Author.Id == _client.CurrentUser.Id);
+        if (pin != null)
+        {
+            _lastGambleMessage = pin as IUserMessage;
+        }
         // Get the bot and doug user
         var dougUser = await _twitchApi.Helix.Users.GetUsersAsync(logins: [_settings.TwitchChannelName]);
         _dougUser = dougUser.Users[0];
@@ -199,7 +208,8 @@ public class PubSub
         try
         {
             // Get end datetime
-            var unixTime = new DateTimeOffset(DateTime.Parse(prediction.data.Event.created_at).AddSeconds(prediction.data.Event.prediction_window_seconds)).ToUnixTimeSeconds();
+            var endTime = new DateTimeOffset(DateTime.Parse(prediction.data.Event.created_at).AddSeconds(prediction.data.Event.prediction_window_seconds));
+            var unixTime = endTime.ToUnixTimeSeconds();
             var endTimeString = $"<t:{unixTime}:R>";
             // Create an embed
             var embed = new EmbedBuilder
@@ -208,6 +218,7 @@ public class PubSub
                 Description = $"Ends {endTimeString}",
                 Color = Color.Orange
             };
+            embed.WithFooter("This feature of the bot is still in development and is not guaranteed to work. Any issues will likely not be fixed until next stream");
             // Dictionary for colors
             var colors = new Dictionary<string, string>
             {
@@ -219,23 +230,32 @@ public class PubSub
             {
                 var totalPoints = prediction.data.Event.outcomes.Sum(outcome => outcome.total_points);
                 var totalUsers = prediction.data.Event.outcomes.Sum(outcome => outcome.total_users);
+                var isResolved = prediction.data.Event.status == "RESOLVED";
                 foreach (var outcome in prediction.data.Event.outcomes)
                 {
-                    var ratio = (double) outcome.total_points / totalPoints * 100;
+                    var ratio = Math.Round((double)totalPoints /outcome.total_points, 2);
                     var userPercentage = (double) outcome.total_users / totalUsers * 100;
                     var pointsPercentage = (double) outcome.total_points / totalPoints * 100;
-                    var topPredictors = outcome.top_predictors.Aggregate("", (current, predictor) => current + $"{predictor.user_display_name} - {predictor.points}\n");
-                    embed.AddField($"{colors[outcome.color]} {outcome.title}", $"""
-                                                                                Points: {outcome.total_points} ({pointsPercentage:0.00}%)
-                                                                                Users: {outcome.total_users} ({userPercentage:0.00}%)
-                                                                                Ratio: {ratio:0.00}%
-                                                                                **Top Predictors:**
-                                                                                {topPredictors}
-                                                                                """);
+                    var isWinner = outcome.id == prediction.data.Event.winning_outcome_id?.ToString();
+                    var prefix = isWinner ? "🏆" : "";
+                    var topPredictors = outcome.top_predictors.OrderByDescending(p => p.points).Aggregate("", (current, predictor) =>
+                    {
+                        var profit = isWinner ? predictor.points * ratio : 0;
+                        if(isResolved)
+                            return current + $"{predictor.user_display_name}: {predictor.points} -> {profit}\n";
+                        return current + $"{predictor.user_display_name}: {predictor.points}\n";
+                    });
+                    embed.AddField($"{prefix}{colors[outcome.color]} {outcome.title}", $"""
+                         Points: {outcome.total_points} ({pointsPercentage:0.00}%)
+                         Users: {outcome.total_users} ({userPercentage:0.00}%)
+                         Ratio: {ratio}
+                         
+                         **__High Rollers__**
+                         {topPredictors}
+                         """);
                 }
             }
             
-            var gambleChannel = _client.GetChannel(886548334154760242) as IMessageChannel;
             if (_lastGambleMessage != null)
             {
                 // If the gamble is not locked or resolved or canceled, update only every 10 seconds
@@ -251,7 +271,7 @@ public class PubSub
             }
             else
             {
-                _lastGambleMessage = await gambleChannel.SendMessageAsync("<@&1072596548636135435>", embed: embed.Build());
+                _lastGambleMessage = await _gambleChannel.SendMessageAsync("<@&1080237787174948936>", embed: embed.Build());
                 await _lastGambleMessage.PinAsync();
                 _lastGamblePost = DateTime.UtcNow;
             }
@@ -259,7 +279,7 @@ public class PubSub
             switch (prediction.data.Event.status)
             {
                 case "RESOLVED":
-                    await gambleChannel.SendMessageAsync($"The gamble has been resolved {_lastGambleMessage.GetJumpUrl()}");
+                    await _gambleChannel.SendMessageAsync($"The gamble has been resolved {_lastGambleMessage.GetJumpUrl()}");
                     await _lastGambleMessage.UnpinAsync();
                     _lastGambleMessage = null;
                     break;

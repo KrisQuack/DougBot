@@ -41,9 +41,16 @@ public class VerificationChecksReadyHandler : INotificationHandler<ReadyNotifica
                             // If the member has been in the server for more than 10 minutes
                             if (member.JoinedAt.Value.UtcDateTime < tenMinutesAgo)
                             {
-                                // Kick the member for not being verified
-                                await member.KickAsync("Not Verified");
-                                kicked++;
+                                try
+                                {
+                                    // Kick the member for not being verified
+                                    await member.KickAsync("Not Verified");
+                                    kicked++;
+                                }
+                                catch (Exception)
+                                {
+                                    Log.Error("[{Source}] {Message}", "VerificationChecks_ReadyHandler", $"Failed to kick {member.DisplayName} {member.Id}");
+                                }
                             }
                             else
                             {

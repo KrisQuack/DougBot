@@ -42,7 +42,7 @@ public class ReportCmd(DougBotContext context) : InteractionModuleBase
                     .WithTitle("User Reported")
                     .WithFields(
                         new EmbedFieldBuilder()
-                            .WithName("User Info")
+                            .WithName("Reported User")
                             .WithValue(
                                 $"\nMention: {reportedUser.Mention}\nUsername: {reportedUser.Username}\nID: {reportedUser.Id}"),
                         new EmbedFieldBuilder()
@@ -51,7 +51,7 @@ public class ReportCmd(DougBotContext context) : InteractionModuleBase
                     )
                     .WithColor(Color.Red)
                     .WithAuthor(new EmbedAuthorBuilder()
-                        .WithName($"{Context.User.Username} ({Context.User.Id})")
+                        .WithName($"Report By {Context.User.Username}")
                         .WithIconUrl(Context.User.GetAvatarUrl()))
                     .WithCurrentTimestamp());
             }
@@ -65,11 +65,11 @@ public class ReportCmd(DougBotContext context) : InteractionModuleBase
                     .WithUrl(message.GetJumpUrl())
                     .WithFields(
                         new EmbedFieldBuilder()
-                            .WithName("User Info")
+                            .WithName("Reported User")
                             .WithValue(
                                 $"\nMention: {message.Author.Mention}\nUsername: {message.Author.Username}\nID: {message.Author.Id}"),
                         new EmbedFieldBuilder()
-                            .WithName("Message Info")
+                            .WithName("Reported Message")
                             .WithValue($"\nChannel: {channel.Mention}\nMessage: {message.Content}"),
                         new EmbedFieldBuilder()
                             .WithName("Reason")
@@ -77,7 +77,7 @@ public class ReportCmd(DougBotContext context) : InteractionModuleBase
                     )
                     .WithColor(Color.Red)
                     .WithAuthor(new EmbedAuthorBuilder()
-                        .WithName($"{Context.User.Username} ({Context.User.Id})")
+                        .WithName($"Reported By {Context.User.Username}")
                         .WithIconUrl(Context.User.GetAvatarUrl()))
                     .WithCurrentTimestamp());
                 //Attachments
@@ -87,6 +87,7 @@ public class ReportCmd(DougBotContext context) : InteractionModuleBase
             foreach (var attachment in attachments)
                 embeds.Add(new EmbedBuilder()
                     .WithTitle("Attachment")
+                    .WithUrl(attachment)
                     .WithImageUrl(attachment)
                     .WithColor(Color.Red)
                     .WithCurrentTimestamp());

@@ -389,7 +389,7 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     var channels = new List<ITextChannel>();
                     channels.AddRange(guild.Channels.OfType<ITextChannel>());
                     response +=
-                        $"**{timer.Elapsed.TotalSeconds}**Channels: {channels.Count}\n";
+                        $"**{timer.Elapsed.TotalMinutes}**\nChannels: {channels.Count}\n";
                     
                     // For each channel, get the last 1000 messages
                     var messageCount = 0;
@@ -446,11 +446,11 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
 
                     await db.SaveChangesAsync();
 
-                    response += $"**{timer.Elapsed.TotalSeconds}**\nMessages added/updated to Database: {messageCount}\n";
+                    response += $"**{timer.Elapsed.TotalMinutes}**\nMessages added/updated to Database: {messageCount}\n";
 
                     // For each member, check if they are in the database, if not add them
                     var members = await guild.GetUsersAsync().FlattenAsync();
-                    response += $"**{timer.Elapsed.TotalSeconds}**Members: {members.Count()}\n";
+                    response += $"**{timer.Elapsed.TotalMinutes}**\nMembers: {members.Count()}\n";
                     var memberCount = 0;
                     var dbMembers = await db.Members.ToDictionaryAsync(m => m.Id, m => m);
                     foreach (var member in members)
@@ -517,7 +517,7 @@ public class AuditLogReadyHandler : INotificationHandler<ReadyNotification>
                     await db.SaveChangesAsync();
 
                     timer.Stop();
-                    response += $"**{timer.Elapsed.TotalSeconds}**\nMembers added/updated to Database: {memberCount}\n";
+                    response += $"**{timer.Elapsed.TotalMinutes}**\nMembers added/updated to Database: {memberCount}\n";
 
                     // Log the response
                     if (memberCount > 0 || messageCount > 0)

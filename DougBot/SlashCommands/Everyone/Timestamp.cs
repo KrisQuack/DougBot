@@ -29,6 +29,10 @@ public class Timestamp : InteractionModuleBase
         DateTime dateTime;
         if (!DateTime.TryParse($"{date} {time} {tz.BaseUtcOffset}", out dateTime))
             throw new Exception("Invalid date and time format");
+        // Check for daylight savings
+        var isDaylight = tz.IsDaylightSavingTime(DateTime.UtcNow);
+        if (isDaylight)
+            dateTime = dateTime.AddHours(-1);
         var dateTimeOffset = new DateTimeOffset(dateTime);
         var parsedUnixTime = dateTimeOffset.ToUnixTimeSeconds();
         var embed = new EmbedBuilder()
@@ -50,7 +54,8 @@ public class DateAutocompleteHandler : AutocompleteHandler
         IAutocompleteInteraction autocompleteInteraction, IParameterInfo parameter, IServiceProvider services)
     {
         var tz = TZConvert.GetTimeZoneInfo("America/Los_Angeles");
-        var date = DateTime.UtcNow.Add(tz.BaseUtcOffset).ToString("dd/MMM/yyyy");
+        var dougTime = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
+        var date = dougTime.ToString("dd/MMM/yyyy");
         return AutocompletionResult.FromSuccess(new[] { new AutocompleteResult(date, date) });
     }
 }
@@ -62,7 +67,8 @@ public class TimeAutocompleteHandler : AutocompleteHandler
     {
         // Get current time in America/Los_Angeles
         var tz = TZConvert.GetTimeZoneInfo("America/Los_Angeles");
-        var time = DateTime.UtcNow.Add(tz.BaseUtcOffset).ToString("HH:mm");
+        var dougTime = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
+        var time = dougTime.ToString("HH:mm");
         return AutocompletionResult.FromSuccess(new[] { new AutocompleteResult(time, time) });
     }
 }

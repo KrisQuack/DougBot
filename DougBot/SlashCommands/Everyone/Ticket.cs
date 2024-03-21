@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
+using DougBot.Discord.Functions;
 using DougBot.Shared.OpenAI;
 using Serilog;
 
@@ -51,8 +52,7 @@ public class Ticket : InteractionModuleBase
             .WithTitle($"{user.DisplayName}: {modal.Title}")
             .WithFooter(footer => footer.Text = ticket.Id.ToString())
             .WithAuthor($"{Context.User.Username} ({Context.User.Id})", Context.User.GetAvatarUrl())
-            .AddField(new EmbedFieldBuilder { Name = "Reason", Value = modal.Description })
-            .AddField(new EmbedFieldBuilder { Name = "Link", Value = openMessage.GetJumpUrl() })
+            .AddField("Link", openMessage.GetJumpUrl())
             .AddField("Title", modal.Name)
             .AddField("Description", modal.Description);
         await staffChannel.SendMessageAsync(embed: staffEmbed.Build(), components: button);
@@ -138,32 +138,13 @@ public class Ticket : InteractionModuleBase
                                                            m.Embeds.Any(e => e.Footer?.Text == thread.Id.ToString())) as IUserMessage;
                 if (message != null)
                 {
-                    await message.ModifyAsync(properties => properties.Components = null);
+                    await message.ModifyAsync(x => x.Components = new ComponentBuilder().Build());
                     // Generate the summary
                     try
                     {
                         // Get the ticket history
                         var ticketHistory = await thread.GetMessagesAsync(int.MaxValue).FlattenAsync();
-                        // Order the history so the oldest messages are first to be processed
-                        ticketHistory = ticketHistory.OrderBy(m => m.CreatedAt);
-                        var ticketString = "";
-                        // Loop through the messages and add them to the string
-                        foreach (var msg in ticketHistory)
-                        {
-                            var authorName = msg.Author.Username;
-                            if (msg.Author is IGuildUser guildUser && guildUser.GuildPermissions.ManageMessages)
-                                authorName += " (mod)";
-                            if (msg.Author.IsBot)
-                                authorName += " (bot)";
-                            var content = msg.CleanContent;
-                            foreach (var embed in msg.Embeds)
-                            {
-                                content += $"\n# Embed\nAuthor: {embed.Author?.Name}\nTitle: {embed.Title}\nDescription: {embed.Description}\n";
-                                foreach (var field in embed.Fields)
-                                    content += $"Field: {field.Name}\nValue: {field.Value}\n";
-                            }
-                            ticketString += $"{authorName}: {content}\n";
-                        }
+                        var ticketString = MessageFunctions.MessageToString(ticketHistory);
                         // Get the summary
                         var ai = new OpenAI();
                         var summary = await ai.TicketSummary(ticketString);
@@ -173,7 +154,6 @@ public class Ticket : InteractionModuleBase
                         // Modify the embed to include the summary
                         var messageEmbed = message.Embeds.FirstOrDefault().ToEmbedBuilder();
                         messageEmbed.AddField("Summary", summary);
-                        await message.ModifyAsync(properties => properties.Embed = messageEmbed.Build());
                         // Send and delete a message to the staff channel to cause a notification
                         var notification = await staffChannel.SendMessageAsync("Ticket closed", messageReference: new MessageReference(message.Id));
                         await notification.DeleteAsync();
